@@ -10,9 +10,8 @@ No tool loop and no retrieval: the facts are chosen in code before the model is 
 differences, or a question type's fixed query), so the model only ever writes. Determinism comes from
 structure - a JSON schema on the answer and a verifier that names what to fix - not from sampling.
 
-The model call itself (streaming, the refusal fallback, the plain-call retry for an environment that
-rejects the output format) and the repair/remap/rescue sequence come from the analyst this platform
-was built on, minus its tool rounds.
+The model call streams, sends the server-side refusal fallback where the model takes it, and retries
+as a plain call in an environment that rejects the output format.
 """
 from __future__ import annotations
 

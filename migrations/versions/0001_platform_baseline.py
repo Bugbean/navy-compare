@@ -1,7 +1,6 @@
 """Platform baseline: accounts, modules, activity log, feedback, job runs.
 
-Consolidated from seven of the source platform's migrations into one
-starting point; docs/PROVENANCE.md lists them and what changed. In short:
+One starting point for the platform tables; docs/PROVENANCE.md lists where they came from. In short:
 
   * modules are Navy Compare's (call screen, review queue, overrides, pilot
     reports) in two layers, rep and lead

@@ -50,18 +50,16 @@ COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() != "fals
 USER_CACHE_SECONDS = 30
 
 # Tokens are stamped by Supabase and the cut-off by us, on different machines,
-# so a little clock skew has to be tolerated — measured at about a second on
-# this platform, which is what verify_access_token's 30s allowance was sized
-# against.
+# so a little clock skew has to be tolerated — typically about a second, which
+# verify_access_token's 30s allowance comfortably covers.
 #
 # But the two allowances guard opposite risks and must not be the same number.
 # There, too little leeway rejects a brand-new token and nobody can sign in at
 # all. Here, too much leaves a session alive that an admin has just revoked:
 # any token issued within the allowance of the cut-off survives it. At 30s
-# that was most of them — resetting the password of someone who had just
-# signed in did nothing, which is how this was caught. Five seconds is several
-# times the skew ever seen here and closes the window to something too short
-# to matter.
+# that is most of them — resetting the password of someone who had just
+# signed in would do nothing. Five seconds is several times the usual skew
+# and closes the window to something too short to matter.
 _REVOKE_LEEWAY = 5
 
 STATUSES = ("pending", "approved", "rejected", "suspended")

@@ -202,11 +202,10 @@ def overview():
         "pending": (ov.get("pending_users") or 0) > 0,
     }
 
-    # Are the scheduled jobs running? On the platform this came from, a job
-    # failed 86 times in a row over two days and nothing said so anywhere. This
-    # tile is cheap — one read of job_runs — and puts it on the page an admin
-    # already opens, rather than only on the page they would have to think to
-    # open.
+    # Are the scheduled jobs running? A job can fail run after run with nothing
+    # saying so anywhere. This tile is cheap — one read of job_runs — and puts it
+    # on the page an admin already opens, rather than only on the page they would
+    # have to think to open.
     pipeline = {"failing": [], "last": None, "ok": True}
     try:
         rows = (sb.table("job_runs").select("job_name,status,started_at")

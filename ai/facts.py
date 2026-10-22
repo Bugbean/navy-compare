@@ -120,13 +120,13 @@ class VerificationResult(_Contract):
 SEMANTIC_KEYS_ENABLED = os.environ.get("AI_SEMANTIC_KEYS_ENABLED", "0") == "1"
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
-FieldKind = Literal["number", "year_range", "date", "time", "score", "text"]
+FieldKind = Literal["number", "year_range", "date", "time", "pair", "text"]
 
 _YEAR_RANGE = re.compile(r"^\s*(\d{4})\s*[-/]\s*(\d{2}|\d{4})\s*$")
 _DATE = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})")
 _TIME = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
-# A pair of figures as one: "97-93" as text, or [97, 93].
-_SCORE = re.compile(r"^\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\s*$")
+# A pair of figures as one: "6-12" as text, or [6, 12].
+_PAIR = re.compile(r"^\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\s*$")
 _NUMERIC_STRING = re.compile(r"^\s*-?\d+(\.\d+)?\s*$")
 _PERCENT_KEY = re.compile(r"(pct|percent|percentage|_share|share_pct|rate)$", re.I)
 _ROWS_IN_FIELDS = 25          # evidence rows whose claimable keys become fields
@@ -155,7 +155,7 @@ def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _is_score_pair(value: Any) -> bool:
+def _is_pair(value: Any) -> bool:
     return (isinstance(value, (list, tuple)) and len(value) == 2
             and all(_is_number(v) and float(v).is_integer() and 0 <= v < 1000 for v in value))
 
@@ -172,19 +172,19 @@ def _classify(value: Any) -> Optional[FieldKind]:
             return "time"
         if _NUMERIC_STRING.match(value):            # an item code "012": a figure stored as text
             return "number"
-        if _SCORE.match(value):
-            return "score"
-    if _is_score_pair(value):
-        return "score"
+        if _PAIR.match(value):
+            return "pair"
+    if _is_pair(value):
+        return "pair"
     return None
 
 
-def score_parts(value: Any) -> Optional[tuple[float, float]]:
+def pair_parts(value: Any) -> Optional[tuple[float, float]]:
     """The two figures of a pair field, however it is stored."""
-    if _is_score_pair(value):
+    if _is_pair(value):
         return float(value[0]), float(value[1])
     if isinstance(value, str):
-        m = _SCORE.match(value)
+        m = _PAIR.match(value)
         if m:
             return float(m.group(1)), float(m.group(2))
     return None
@@ -228,7 +228,7 @@ def _add(out: dict[str, FieldValue], name: str, value: Any, unit: Optional[str])
         return
     if kind == "number" and unit is None and _PERCENT_KEY.search(name.rsplit(".", 1)[-1]):
         unit = "percent"                    # benefit_pct: a percentage by name
-    if kind == "score" and not isinstance(value, str):
+    if kind == "pair" and not isinstance(value, str):
         value = f"{int(value[0])}-{int(value[1])}"
     out[name] = FieldValue(value, unit, kind)
 
@@ -284,7 +284,7 @@ def _redact_row(row: Any) -> Any:
     kept = {}
     for k, v in row.items():
         if k in CLAIMABLE_EVIDENCE_KEYS or isinstance(v, bool) or (isinstance(v, str) and not _classify(v) == "number"):
-            kept[k] = f"{int(v[0])}-{int(v[1])}" if _is_score_pair(v) else v
+            kept[k] = f"{int(v[0])}-{int(v[1])}" if _is_pair(v) else v
     return kept
 
 

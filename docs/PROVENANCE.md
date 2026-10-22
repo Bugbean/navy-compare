@@ -4,7 +4,7 @@ Code in this repository that did not start here. It answers the vendor questionn
 
 All of it was written by Chris Eade and comes from **nbl-platform**, commit `a34062b6bcf5e4afd1f9e154926254a546cdad3b` (22 Oct 2026). Files were exported with `git show a34062b:<path>`, so nothing uncommitted in that working copy came across. None of nbl-platform's git history is in this repository.
 
-Every ported file was renamed and stripped of basketball-specific code. `tests/test_no_nbl_refs.py` fails if an NBL name, domain or concept turns up anywhere outside this file and `CLAUDE.md`.
+Every ported file was renamed and stripped of basketball-specific code. `tests/test_clean_source.py` fails if an NBL name, domain or concept turns up anywhere outside this file.
 
 ## Platform port (23 Oct 2026)
 
@@ -34,7 +34,7 @@ Every ported file was renamed and stripped of basketball-specific code. `tests/t
 | `tests/test_session_persistence.py`, `test_session_revocation.py`, `test_owner_protection.py`, `test_feedback.py` | same paths | | Imports. Shared-password and NBL site cases removed. |
 | `tests/test_alert_gate.py` | `tests/test_alerts.py` lines 1–190 | 484 → 189 | The pure `AlertGate` tests only. The live watcher tests were not brought across. |
 
-New in this repo, not ported: `app/static/app.css`, `app/templates/base.html` (replaces NBL's base and its `nav.py` menu), `app/templates/home.html`, `wsgi.py`, `jobs/run_migrate.py`, `migrations/env.py`, `docker/initdb/00_supabase_shim.sql`, `docker-compose.yml`, `deploy/Dockerfile`, `tests/test_app.py`, `tests/test_no_nbl_refs.py`.
+New in this repo, not ported: `app/static/app.css`, `app/templates/base.html` (replaces NBL's base and its `nav.py` menu), `app/templates/home.html`, `wsgi.py`, `jobs/run_migrate.py`, `migrations/env.py`, `docker/initdb/00_supabase_shim.sql`, `docker-compose.yml`, `deploy/Dockerfile`, `tests/test_app.py`, `tests/test_clean_source.py`.
 
 ## AI layer and platform port (23 Oct 2026)
 

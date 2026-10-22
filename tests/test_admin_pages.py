@@ -1,8 +1,8 @@
 """Every admin page renders.
 
-The admin templates came from a larger app and link to each other with
-url_for. A link to a page that was not brought across only fails when the
-page is opened, so each one is opened here against a fake Supabase.
+The admin templates link to each other with url_for. A link to a page that does
+not exist only fails when the page is opened, so each one is opened here against
+a fake Supabase.
 """
 import pytest
 

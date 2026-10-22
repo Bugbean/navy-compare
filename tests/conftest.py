@@ -1,9 +1,8 @@
 """Tests do not touch staging or production.
 
-On the platform this came from they did: tests set credentials with
-`os.environ.setdefault`, which keeps a real value if one is already there, so
-on any machine with .env loaded the suite wrote 256 rows into the production
-audit log before anyone noticed.
+The easy mistake is a test that sets credentials with `os.environ.setdefault`,
+which keeps a real value if one is already there: on any machine with .env
+loaded, the suite then writes into the production database.
 
 So the Supabase credentials are replaced for every test, before any test
 module is imported, and DATABASE_URL must point at a local database. A test

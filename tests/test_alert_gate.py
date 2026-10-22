@@ -1,7 +1,7 @@
 """Managed alert delivery: one alert per incident, however hard it flaps.
 
-On the platform this came from, a flapping connection once produced 330+
-texts. These assert the thing that was actually wanted — that an outage is
+A flapping check must not become hundreds of messages. These assert the
+thing that is actually wanted — that an outage is
 announced once, a recovery once, and that no pattern of toggling gets past
 that. `AlertGate` is pure arithmetic on a fake clock, so every rule is tested
 in isolation and instantly.
@@ -53,8 +53,8 @@ def poll(gate, clock, key, healthy, seconds, step=30, deliver=True, **kw):
 # ── the state machine ──────────────────────────────────────────────────────
 
 def test_going_bad_alerts_exactly_once(gate, clock):
-    sent = poll(gate, clock, KEY, False, 330 * 120, step=120)
-    assert [a for _, a in sent] == [ALERT], "330 bad polls, one alert"
+    sent = poll(gate, clock, KEY, False, 300 * 120, step=120)
+    assert [a for _, a in sent] == [ALERT], "300 bad polls, one alert"
 
 
 def test_a_stay_in_the_bad_state_is_suppressed_with_a_reason(gate, clock):

@@ -1,15 +1,14 @@
-"""People were being signed out. The refresh token is the reason.
+"""Why people get signed out unexpectedly: the refresh token.
 
 Supabase rotates it on every use: the token presented is spent, and a new
-one comes back. On the platform this came from, three services shared the
-cookie and one page polled every four seconds; here the call screen fires
-several htmx requests at once, which is the same shape.
+one comes back. The call screen fires several htmx requests at once, each
+carrying the same cookie.
 
 So when the access token expired, every request in flight called Supabase
 with the same refresh token at once. One won and rotated it; the rest
 presented a spent token, were refused, and "refused" reads to the caller as
-"not signed in". More tabs meant more likely, which is why it looked random
-and found the heaviest users first.
+"not signed in". More tabs make it more likely, which is why it looks random
+and finds the heaviest users first.
 
 These cover the three faults together: refreshing once per token rather than
 once per request, renewing early while the token still works instead of at

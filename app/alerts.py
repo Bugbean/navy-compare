@@ -2,8 +2,8 @@
 from becoming a flood of messages.
 
 A checker reports a condition every run ("the snapshot is stale", "the AI is
-not answering"). Sending on every report once produced 330 texts in one
-evening on the platform this came from. This module turns a stream of
+not answering"). Sending on every report turns one flapping check into
+hundreds of messages in an evening. This module turns a stream of
 observations into at most a handful of *decisions*.
 
     healthy   -> unhealthy   one alert

@@ -19,9 +19,10 @@ _SB: "Client | None" = None
 def get_sb() -> Client:
     """The Supabase client for this worker, built once.
 
-    Building one per call was measured at about 215ms, and a query through a
-    fresh client at ~535ms against ~50ms through a warm one, because each new
-    client opens a new TLS connection and throws it away after one question.
+    Building one per call costs a few hundred milliseconds, and a query through
+    a fresh client is roughly ten times slower than through a warm one, because
+    each new client opens a new TLS connection and throws it away after one
+    question.
 
     Shared across the worker's threads deliberately. The underlying httpx
     client is safe to use from several threads and pools its connections;

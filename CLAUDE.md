@@ -20,12 +20,6 @@ Python 3.11, Flask 3 (`app/`, factory in `app/__init__.py`, entry `wsgi.py`), Ji
 - No personal member data beyond what the plan's Personal data section allows.
 - Tests never reach staging or prod (`tests/conftest.py` enforces it).
 
-## Porting from nbl-platform
+## Reused code
 
-Some code here comes from Chris's NBL platform (`../../NBL Commentary/nbl-platform`, read only); `docs/PROVENANCE.md` lists every file. Everything the plan reuses has been brought across, so nothing further is planned. If something more is ever needed:
-
-1. Export from a pinned commit, never the working copy: `git -C <nbl-platform> show <commit>:<path>`.
-2. Rename `nbl_` prefixes and remove anything about players, teams, games, seasons, the live feed or commentary.
-3. Bring its tests across and make them pass.
-4. Add a row to `docs/PROVENANCE.md`: source path, commit, target, lines, what changed.
-5. `tests/test_no_nbl_refs.py` must stay green. It scans every file except `docs/PROVENANCE.md` and this one.
+Some of this code was reused from an earlier Bugbean platform; `docs/PROVENANCE.md` lists every file, where it came from and what changed. Nothing further is planned from it. `tests/test_clean_source.py` must stay green: it fails if that platform's names or domain turn up anywhere except `docs/PROVENANCE.md`.

@@ -27,7 +27,7 @@ from typing import Any, Callable, Iterable, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .facts import EvidencePack, FieldValue, as_number, date_iso, range_start, score_parts, time_hhmm
+from .facts import EvidencePack, FieldValue, as_number, date_iso, pair_parts, range_start, time_hhmm
 
 # --- the draft the model returns -------------------------------------------------------------------
 
@@ -247,8 +247,8 @@ def _holds(fv: FieldValue, token: Token) -> Optional[str]:
         if fv.kind != "time" or time_hhmm(fv.value) != token.value:
             return f"field holds {fv.value!r}, not time {token.text}"
         return None
-    if fv.kind == "score":
-        parts = score_parts(fv.value) or ()
+    if fv.kind == "pair":
+        parts = pair_parts(fv.value) or ()
         if any(_same(p, token) for p in parts):
             return None
         return f"field holds {fv.value!r}, not {token.text}"

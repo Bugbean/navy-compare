@@ -8,9 +8,8 @@
 #   _ENV     staging | prod (selects the nc-<env>-* service and jobs)
 #
 # Each build tags its image with its own BUILD_ID and deploys THAT tag, never
-# :latest. Two pushes close together used to race on the platform this came
-# from: both pushed :latest, and the second build's deploy picked up the
-# first build's image.
+# :latest. Two pushes close together would otherwise race: both push :latest,
+# and the second build's deploy can pick up the first build's image.
 
 steps:
   - id: build
