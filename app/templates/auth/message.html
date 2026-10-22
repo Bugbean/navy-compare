@@ -1,0 +1,7 @@
+{% extends "auth/base.html" %}
+{% block title %}{{ title }} — Navy Health Policy Compare{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="body-text">{{ body|safe }}</p>
+<div class="links"><a href="{{ url_for('auth.login') }}">Back to sign in</a></div>
+{% endblock %}

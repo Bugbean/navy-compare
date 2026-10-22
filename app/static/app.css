@@ -1,0 +1,98 @@
+/* Base styles for every signed-in page. The tokens are the ones the admin
+   templates read; the rep screen adds its own. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #f3f5f8;
+  --surface:  #ffffff;
+  --border:   #d9dee6;
+  --accent:   #1f4e8c;
+  --text:     #15202e;
+  --muted:    #5d6b7d;
+  --green:    #2d7a3a;
+  --red:      #a33a3a;
+  --row-hover:      #eef2f8;
+  --tint-good:      rgba(45, 122, 58, 0.16);
+  --tint-bad:       rgba(163, 58, 58, 0.14);
+  --tint-accent-lo: rgba(31, 78, 140, 0.08);
+  --tint-accent-hi: rgba(31, 78, 140, 0.18);
+  --neg-text:       #a33a3a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:       #0f141b;
+    --surface:  #18202b;
+    --border:   #2a3544;
+    --accent:   #7fa8e0;
+    --text:     #e6ebf2;
+    --muted:    #8d9aab;
+    --row-hover:      #1e2834;
+    --tint-good:      rgba(80, 170, 100, 0.22);
+    --tint-bad:       rgba(220, 100, 100, 0.2);
+    --tint-accent-lo: rgba(127, 168, 224, 0.1);
+    --tint-accent-hi: rgba(127, 168, 224, 0.22);
+    --neg-text:       #ff9b9b;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+.topbar { display: flex; gap: 1.2rem; align-items: center; padding: 10px 2rem;
+          background: var(--surface); border-bottom: 1px solid var(--border); }
+.topbar a { color: var(--muted); text-decoration: none; font-size: 0.88rem; }
+.topbar a:hover { color: var(--text); }
+.topbar .brand { color: var(--accent); font-weight: 700; font-size: 1rem; }
+.topbar .spacer { flex: 1; }
+.topbar .who { color: var(--muted); font-size: 0.82rem; }
+
+main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+
+h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 1.5rem; }
+h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); }
+
+.filters { display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-group label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+select, input[type=text] {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 4px; font-size: 0.875rem; min-width: 160px;
+}
+select:focus, input:focus { outline: 1px solid var(--accent); }
+button[type=submit], .btn {
+  background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 4px;
+  font-weight: 600; font-size: 0.875rem; cursor: pointer; text-decoration: none; display: inline-block;
+}
+button[type=submit]:hover, .btn:hover { opacity: 0.85; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th {
+  text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 500; font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+th.num, td.num { text-align: right; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:hover td { background: var(--row-hover); }
+
+.breadcrumb { color: var(--muted); font-size: 0.8rem; margin-bottom: 1rem; }
+.breadcrumb a { color: var(--muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--text); }
+
+.metrics { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 20px; min-width: 100px; text-align: center; }
+.metric .val { font-size: 1.8rem; font-weight: 700; }
+.metric .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+.tag { background: var(--border); color: var(--muted); font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; margin-left: 4px; }
+
+@media (max-width: 640px) {
+  .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 0.8rem; }
+  main { padding: 1rem 16px; }
+}

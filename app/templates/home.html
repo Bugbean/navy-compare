@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Navy Health Policy Compare</h1>
+<p style="color:var(--muted); line-height:1.6; max-width:60ch">
+  You're signed in as {{ current_user.email }}. The call screen arrives in week 3 of the build;
+  until then this page is a placeholder.
+</p>
+{% if current_user.is_admin %}
+<p style="margin-top:1.5rem"><a class="btn" href="{{ url_for('admin.overview') }}">Go to admin</a></p>
+{% endif %}
+{% endblock %}

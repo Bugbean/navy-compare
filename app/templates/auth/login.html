@@ -1,0 +1,44 @@
+{% extends "auth/base.html" %}
+{% block title %}Sign in — Navy Health Policy Compare{% endblock %}
+{% block content %}
+<style>
+  .tabs { display:flex; gap:4px; background:#eef1f5; border-radius:20px; padding:4px; margin-bottom:6px; }
+  .tabs button { margin:0; padding:7px; font-size:0.82rem; background:transparent; color:#5d6b7d; border-radius:16px; }
+  .tabs button.on { background:#ffffff; color:#15202e; }
+  .pane[hidden] { display:none !important; }
+</style>
+
+<h1>Sign in</h1>
+
+<div class="tabs" role="tablist"{% if notice %} data-start="magic"{% endif %}>
+  <button type="button" class="on" data-pane="pw">Password</button>
+  <button type="button" data-pane="magic">Email me a link</button>
+</div>
+
+<form method="post" class="pane" id="pane-pw">
+  <input type="hidden" name="mode" value="password">
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" value="{{ email }}" required autocomplete="username" autofocus>
+  <label for="password">Password</label>
+  <input type="password" id="password" name="password" required autocomplete="current-password">
+  <button type="submit">Sign in</button>
+</form>
+
+<form method="post" class="pane" id="pane-magic" hidden>
+  <input type="hidden" name="mode" value="magic">
+  <label for="email2">Email</label>
+  <input type="email" id="email2" name="email" value="{{ email }}" required autocomplete="username">
+  <p class="hint">We'll email you a one-time link — no password needed.</p>
+  <button type="submit">Send sign-in link</button>
+</form>
+
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% if notice %}<div class="note">{{ notice }}</div>{% endif %}
+
+<div class="links">
+  <a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a><br>
+  No account? Ask your team lead for an invitation.
+</div>
+
+<script src="{{ url_for('static', filename='login.js') }}" defer></script>
+{% endblock %}

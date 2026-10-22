@@ -1,0 +1,14 @@
+# Words no AI-written script may contain, whatever the facts say (plan, Verifier). Navy Health's sales
+# lead and legal can read and comment on this file. Matched as whole words, any case.
+words:
+  - best
+  - guaranteed
+  - guarantee
+  - always
+  - cheapest
+  - never
+  - recommend
+  - diagnose
+  - prescribe
+  - treat
+  - cure

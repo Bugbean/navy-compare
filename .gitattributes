@@ -1,0 +1,3 @@
+# LF everywhere: the shell scripts and Dockerfile run on Linux in Cloud Build,
+# where a CRLF line ending breaks bash.
+* text=auto eol=lf

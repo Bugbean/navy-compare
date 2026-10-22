@@ -1,0 +1,39 @@
+# Local development: Postgres 16 with stand-ins for Supabase's auth schema
+# (docker/initdb/). Sign-in still needs a Supabase project (staging) for
+# GoTrue; the database here is for migrations, the engine and the tests.
+#
+#   docker compose up -d db
+#   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/navy_compare python -m jobs.run_migrate
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: navy_compare
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d navy_compare"]
+      interval: 2s
+      retries: 30
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/navy_compare
+      SESSION_COOKIE_SECURE: "false"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+{% extends "auth/base.html" %}
+{% block title %}Reset password — Navy Health Policy Compare{% endblock %}
+{% block content %}
+<h1>Reset password</h1>
+<p class="sub">Enter your email and we'll send you a reset link.</p>
+<form method="post">
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" required autocomplete="email" autofocus>
+  <button type="submit">Send reset link</button>
+</form>
+<div class="links"><a href="{{ url_for('auth.login') }}">Back to sign in</a></div>
+{% endblock %}

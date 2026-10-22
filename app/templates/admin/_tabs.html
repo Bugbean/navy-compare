@@ -1,0 +1,38 @@
+{# One tab bar, used by every admin page that is a tab of another.
+
+   The admin menu (base.html) names destinations; this names the views
+   inside one.
+
+   Usage:
+     {% import "admin/_tabs.html" as tabbar %}
+     {{ tabbar.tabs([("Events", url_for("admin.activity"), True), ...]) }}
+
+   Each item is (label, url, is_current). #}
+
+{# Each destination declared once, so adding a tab is a one-line change here.
+   `current` is the key of the tab being rendered. #}
+
+{% macro activity_tabs(current) -%}
+{{ tabs([
+     ("Events",   url_for("admin.activity"), current == "events"),
+     ("AI usage", url_for("admin.usage"),    current == "usage"),
+   ]) }}
+{%- endmacro %}
+
+{% macro tabs(items) -%}
+<style>
+  .adm-tabs { display:flex; flex-wrap:wrap; gap:4px; margin:-0.4rem 0 1.3rem;
+              border-bottom:1px solid var(--border); }
+  .adm-tabs a { padding:8px 15px; font-size:0.86rem; text-decoration:none; color:var(--muted);
+                border:1px solid transparent; border-bottom:none; border-radius:5px 5px 0 0;
+                margin-bottom:-1px; white-space:nowrap; }
+  .adm-tabs a:hover { color:var(--text); }
+  .adm-tabs a[aria-current="page"] { color:var(--text); font-weight:600; background:var(--surface);
+                border-color:var(--border); border-bottom:1px solid var(--surface); }
+</style>
+<nav class="adm-tabs" aria-label="Views of this page">
+  {%- for label, url, current in items %}
+  <a href="{{ url }}"{{ ' aria-current="page"'|safe if current }}>{{ label }}</a>
+  {%- endfor %}
+</nav>
+{%- endmacro %}

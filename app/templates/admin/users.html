@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Users — Navy Compare{% endblock %}
+{% block content %}
+<style>
+  .status-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:1.25rem; }
+  .status-tabs a {
+    padding:6px 14px; border-radius:16px; border:1px solid var(--border);
+    color:var(--muted); text-decoration:none; font-size:0.82rem;
+  }
+  .status-tabs a.on { background:var(--surface); color:var(--text); border-color:var(--accent); }
+  .status-tabs .n { color:var(--accent); font-weight:700; margin-left:4px; }
+  .badge { font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px;
+           text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; }
+  .b-pending   { background:var(--tint-accent-hi); color:var(--accent); }
+  .b-approved  { background:var(--tint-good); color:var(--text); }
+  .b-rejected, .b-suspended { background:var(--tint-bad); color:var(--neg-text); }
+  tr.is-pending td { background:var(--tint-accent-lo); }
+  .invite { display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.5rem;
+            padding:14px 18px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+  .invite label { display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:var(--muted); }
+  .invite input[type=email] { background:var(--surface); border:1px solid var(--border); color:var(--text);
+            padding:6px 10px; border-radius:4px; font-size:0.875rem; min-width:240px; }
+  .invite-msg { background:var(--tint-bad); color:var(--neg-text); padding:9px 14px; border-radius:6px; margin-bottom:1rem; font-size:0.88rem; }
+</style>
+
+<h1>Users</h1>
+{% set pending_count = counts.pending %}
+{% include "admin/_styles.html" %}
+
+{% if request.args.get('invite') %}<p class="invite-msg">{{ {
+  'email': "Nothing was sent: that doesn't look like an email address.",
+  'exists': 'That address already has an account — find it below.',
+  'failed': "Supabase refused the invitation: " ~ (request.args.get('why') or 'unknown error') ~ ".",
+}[request.args.get('invite')] }}</p>{% endif %}
+
+<form method="post" action="{{ url_for('auth.admin_invite') }}" class="invite">
+  <input type="hidden" name="csrf" value="{{ csrf }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+  <label>Email <input type="email" name="email" required maxlength="320" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+  <label>Full name <input type="text" name="full_name" required maxlength="200" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+  <label>Role
+    <select name="role">
+      <option value="rep">Rep</option>
+      <option value="lead">Team lead</option>
+      <option value="admin">Administrator</option>
+    </select></label>
+  <button type="submit">Invite</button>
+</form>
+
+<div class="status-tabs">
+  <a href="{{ url_for('auth.admin_users') }}" class="{{ 'on' if not status }}">All<span class="n">{{ counts.values()|sum }}</span></a>
+  {% for s in ['pending', 'approved', 'rejected', 'suspended'] %}
+  <a href="{{ url_for('auth.admin_users', status=s) }}" class="{{ 'on' if status == s }}">{{ s|capitalize }}<span class="n">{{ counts[s] }}</span></a>
+  {% endfor %}
+</div>
+
+{% if users %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Email confirmed</th><th>Last activity</th><th>Invited</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr class="{{ 'is-pending' if u.status == 'pending' }}">
+        <td style="font-weight:600">{{ u.full_name or '—' }}{% if u.is_admin %} <span class="tag">admin</span>{% endif %}</td>
+        <td>{{ u.email }}</td>
+        <td style="color:var(--muted)">{{ u.phone or '—' }}</td>
+        <td><span class="badge b-{{ u.status }}">{{ u.status }}</span></td>
+        <td style="color:var(--muted)">{{ 'Yes' if u.confirmed_at else 'Not yet' }}</td>
+        {# Empty, not "never", for an account that has done nothing: a blank
+           cell is read faster than a word that has to be compared down the
+           column. The title carries the detail for anyone who wants it. #}
+        <td style="color:var(--muted); white-space:nowrap"
+            {% if u.activity %}title="{{ u.activity.events }} events, {{ u.activity.ai_questions }} AI questions{% if u.activity.last_sign_in %} · last signed in {{ u.activity.last_sign_in[:16]|replace('T', ' ') }}{% endif %}"{% endif %}>
+          {{ u.activity.last_activity[:16]|replace('T', ' ') if u.activity and u.activity.last_activity else '' }}
+        </td>
+        <td style="color:var(--muted)">{{ u.created_at[:10] }}</td>
+        <td><a href="{{ url_for('auth.admin_user', user_id=u.id) }}" class="btn" style="padding:4px 12px;font-size:0.75rem">
+          {{ 'Review' if u.status == 'pending' else 'Manage' }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p style="color:var(--muted)">No users{% if status %} with status "{{ status }}"{% endif %}.</p>
+{% endif %}
+{% endblock %}

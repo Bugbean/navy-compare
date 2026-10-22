@@ -1,0 +1,50 @@
+[project]
+name = "navy-compare"
+version = "0.1.0"
+description = "Navy Health Policy Compare: competitor policy comparison for retention calls"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "flask>=3.0,<4",
+    "gunicorn>=22.0,<27",
+    "python-dotenv>=1.0,<2",
+    # Accounts, activity log and feedback go through PostgREST (app/db.py).
+    "supabase>=2.10,<3",
+    "PyJWT[crypto]>=2.8,<3",
+    # 1.0 changed messages.create(); pinned to the 1.x line.
+    "anthropic[vertex]>=1.6,<2",
+    "psycopg[pool]>=3.2,<4",
+    # No binary wheel for Windows on ARM; there psycopg needs a local libpq.
+    "psycopg-binary>=3.2,<4; platform_machine != 'ARM64'",
+    "alembic>=1.13,<2",
+    "sqlalchemy>=2.0,<3",
+    "tzdata>=2024.1",
+    "pydantic>=2.6,<3",
+    "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "ruff>=0.6", "mypy>=1.11"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "ai*", "jobs*", "identity*"]
+
+[tool.setuptools.package-data]
+app = ["templates/*.html", "templates/*/*.html", "static/*"]
+ai = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["E501"]

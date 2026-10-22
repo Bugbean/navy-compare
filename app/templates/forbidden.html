@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}No access — Navy Compare{% endblock %}
+{% block content %}
+<div style="max-width:520px; margin:3rem auto; text-align:center">
+  <h1>You don't have access to this</h1>
+  <p style="color:var(--muted); line-height:1.6">
+    Your account isn't set up for <strong>{{ module_label or 'this section' }}</strong>.
+    Contact the platform administrator if you need it.
+  </p>
+  {% if first_allowed %}
+  <p style="margin-top:1.5rem"><a class="btn" href="{{ first_allowed }}">Go to your home page</a></p>
+  {% endif %}
+</div>
+{% endblock %}

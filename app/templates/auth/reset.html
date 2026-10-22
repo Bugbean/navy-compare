@@ -1,0 +1,20 @@
+{% extends "auth/base.html" %}
+{% block title %}{{ 'Choose your password' if welcome else 'Choose a new password' }} — Navy Health Policy Compare{% endblock %}
+{% block content %}
+{% if welcome %}
+<h1>Welcome to Policy Compare</h1>
+<p class="hint" style="margin-bottom:1rem">Choose a password for your account{% if email %}, <strong>{{ email }}</strong>{% endif %}. You'll use it with your email address to sign in from now on.</p>
+{% else %}
+<h1>Choose a new password</h1>
+{% endif %}
+<form method="post">
+  {% if csrf %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endif %}
+  <label for="password">{{ 'Password' if welcome else 'New password' }}</label>
+  <input type="password" id="password" name="password" required minlength="{{ min_len }}" autocomplete="new-password" autofocus>
+  <p class="hint">At least {{ min_len }} characters.</p>
+  <label for="password_confirm">Confirm {{ 'password' if welcome else 'new password' }}</label>
+  <input type="password" id="password_confirm" name="password_confirm" required minlength="{{ min_len }}" autocomplete="new-password">
+  <button type="submit">{{ 'Save and continue' if welcome else 'Save password' }}</button>
+</form>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% endblock %}

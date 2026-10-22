@@ -1,0 +1,18 @@
+{% extends "auth/base.html" %}
+{% block title %}Awaiting approval — Navy Health Policy Compare{% endblock %}
+{% block content %}
+{% if user and user.status in ('rejected', 'suspended') %}
+<h1>Access unavailable</h1>
+<p class="body-text">
+  {% if user.status == 'suspended' %}Your access has been suspended.{% else %}Your request wasn't approved.{% endif %}
+  If you think this is a mistake, contact the platform administrator.
+</p>
+{% else %}
+<h1>Awaiting approval</h1>
+<p class="body-text">
+  Thanks{% if user and user.full_name %}, {{ user.full_name.split()[0] }}{% endif %} — your email is confirmed.
+  An administrator will review your account, and you'll get an email as soon as it's approved.
+</p>
+{% endif %}
+<div class="links"><a href="{{ url_for('auth.logout') }}">Sign out</a></div>
+{% endblock %}

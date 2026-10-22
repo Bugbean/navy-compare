@@ -1,0 +1,69 @@
+# Build, migrate AND deploy — used by the Cloud Build GitHub trigger created
+# by deploy/setup-triggers.sh. A push to main updates staging; prod deploys
+# on a tag (plan, Environments).
+#
+# Substitutions:
+#   _IMAGE   full Artifact Registry image tag
+#   _REGION  deployment region
+#   _ENV     staging | prod (selects the nc-<env>-* service and jobs)
+#
+# Each build tags its image with its own BUILD_ID and deploys THAT tag, never
+# :latest. Two pushes close together used to race on the platform this came
+# from: both pushed :latest, and the second build's deploy picked up the
+# first build's image.
+
+steps:
+  - id: build
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'deploy/Dockerfile', '--build-arg', 'APP_BUILD=${SHORT_SHA}-${BUILD_ID}', '-t', '${_IMAGE}', '-t', '${_IMAGE}-${BUILD_ID}', '.']
+
+  - id: smoke
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args: ['deploy/smoke-check.sh', '${_IMAGE}']
+
+  - id: push
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE}-${BUILD_ID}']
+
+  - id: push-latest
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE}']
+
+  # Migrations first, as a job, so the schema is ahead of the code that
+  # needs it. A failed migration stops the deploy here.
+  - id: migrate
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run jobs update "nc-${_ENV}-migrate" \
+          --region "${_REGION}" --image "${_IMAGE}-${BUILD_ID}"
+        gcloud run jobs execute "nc-${_ENV}-migrate" --region "${_REGION}" --wait
+
+  # Only the image is updated here. Env vars, secrets, service account and
+  # scaling stay as deploy.sh configured them.
+  - id: deploy
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run services update "nc-${_ENV}-web" \
+          --region "${_REGION}" --image "${_IMAGE}-${BUILD_ID}"
+        for job in $(gcloud run jobs list --region "${_REGION}" --format='value(metadata.name)' \
+                     | grep "^nc-${_ENV}-" | grep -v -- "-migrate$"); do
+          gcloud run jobs update "$job" --region "${_REGION}" --image "${_IMAGE}-${BUILD_ID}"
+        done
+
+images:
+  - '${_IMAGE}'
+  - '${_IMAGE}-${BUILD_ID}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Admin — Navy Compare{% endblock %}
+{% block content %}
+{% set pending_count = ov.pending_users %}
+<h1>Platform admin</h1>
+{% include "admin/_styles.html" %}
+
+<style>
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px; margin-bottom:1.8rem; }
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;
+          text-decoration:none; color:var(--text); display:block; }
+  a.tile:hover { border-color:var(--accent); }
+  .tile .k { color:var(--muted); font-size:0.78rem; }
+  .tile .v { font-size:1.7rem; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .tile .s { color:var(--muted); font-size:0.76rem; margin-top:4px; }
+  .tile.warn { border-color:var(--accent); background:var(--tint-accent-lo); }
+  .tile.warn .v { color:var(--accent); }
+  .cols { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 2fr); gap:24px; }
+  @media (max-width: 860px) { .cols { grid-template-columns:minmax(0, 1fr); } }
+  h2 { font-size:1rem; margin:0 0 10px; }
+  .pending-list { list-style:none; padding:0; margin:0; }
+  .pending-list li { display:flex; justify-content:space-between; gap:10px; align-items:center;
+                     padding:9px 0; border-bottom:1px solid var(--border); font-size:0.88rem; }
+  .pending-list .who { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+</style>
+
+<div class="tiles">
+  <a class="tile {{ 'warn' if alerts.pending }}" href="{{ url_for('auth.admin_users', status='pending') }}">
+    <div class="k">Waiting for approval</div>
+    <div class="v">{{ ov.pending_users }}</div>
+    <div class="s">{{ ov.approved_users }} approved{% if ov.unconfirmed_users %} · {{ ov.unconfirmed_users }} yet to confirm email{% endif %}</div>
+  </a>
+  <a class="tile" href="{{ url_for('admin.activity', event='sign_in') }}">
+    <div class="k">Sign-ins today</div>
+    <div class="v">{{ ov.sign_ins_today }}</div>
+    <div class="s">Sydney time</div>
+  </a>
+  <a class="tile {{ 'warn' if alerts.failed }}" href="{{ url_for('admin.activity', event='sign_in_failed') }}">
+    <div class="k">Failed sign-ins, 24h</div>
+    <div class="v">{{ ov.failed_24h }}</div>
+    <div class="s">{% if ov.top_failed_email %}Most: {{ ov.top_failed_email }} ({{ ov.top_failed_count }}){% elif ov.top_failed_count %}Most: admin fallback login ({{ ov.top_failed_count }}){% else %}None{% endif %}</div>
+  </a>
+  <a class="tile {{ 'warn' if alerts.denied }}" href="{{ url_for('admin.activity', event='access_denied') }}">
+    <div class="k">Access denied, 24h</div>
+    <div class="v">{{ ov.denied_24h }}</div>
+    <div class="s">{% if ov.top_denied_email %}Most: {{ ov.top_denied_email }} ({{ ov.top_denied_count }}){% else %}Pages people weren't given{% endif %}</div>
+  </a>
+  <a class="tile" href="{{ url_for('admin.usage', period='today') }}">
+    <div class="k">AI questions today</div>
+    <div class="v">{{ ov.ai_today }}</div>
+    <div class="s">{{ ov.offtopic_24h }} off-topic refused, 24h</div>
+  </a>
+  <a class="tile" href="{{ url_for('admin.usage', period='today') }}">
+    <div class="k">AI cost today (est.)</div>
+    <div class="v">{{ ov.cost_today|usd }}</div>
+    <div class="s">This month: {{ ov.cost_month|usd }} USD</div>
+  </a>
+  {# The scheduled jobs, on the page an admin already opens: a failing job
+     nobody is told about is the failure that matters. #}
+  <a class="tile {{ 'warn' if pipeline.ok is not true }}" href="{{ url_for('admin.activity') }}">
+    <div class="k">Scheduled jobs</div>
+    <div class="v">{% if pipeline.ok %}OK{% elif pipeline.ok is none %}?{% else %}{{ pipeline.failing|length }}{% endif %}</div>
+    <div class="s">
+      {%- if pipeline.ok %}every job last ran clean
+      {%- elif pipeline.ok is none %}could not be read
+      {%- else %}{% for name, n in pipeline.failing[:2] %}{{ name }} failed{% if n > 1 %} {{ n }}&times;{% endif %}{{ '; ' if not loop.last }}{% endfor %}
+      {%- endif %}
+    </div>
+  </a>
+  <a class="tile {{ 'warn' if alerts.limited }}" href="{{ url_for('admin.activity', event='ai_rate_limited') }}">
+    <div class="k">Hit their AI limit, 24h</div>
+    <div class="v">{{ ov.rate_limited_24h }}</div>
+    <div class="s">Default {{ defaults.minute }}/min · {{ defaults.hour }}/hour · {{ defaults.day }}/24h</div>
+  </a>
+</div>
+
+<section style="margin-bottom:1.5rem">
+  <h2>Freshness</h2>
+  {# Asked on every load, never cached: app/freshness.py #}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>What</th><th>State</th><th>Last good</th><th>Runs</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for s in freshness %}
+        <tr class="{{ 'sec' if s.state != 'ok' }}">
+          <td>{{ s.entry.label }}</td>
+          <td><span class="ev {{ 'ev-access' if s.state != 'ok' }}">{{ s.state }}</span></td>
+          <td class="muted">{{ s.last_ok|syd if s.last_ok else '—' }}</td>
+          <td class="muted">{{ s.entry.runs }}</td>
+          <td class="muted">{{ s.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="cols">
+  <section>
+    <h2>Waiting for approval</h2>
+    {% if pending %}
+    <ul class="pending-list">
+      {% for u in pending %}
+      <li>
+        <span class="who"><strong>{{ u.full_name or '—' }}</strong><br><span class="muted">{{ u.email }}</span></span>
+        <a class="btn" style="padding:4px 12px;font-size:0.75rem" href="{{ url_for('auth.admin_user', user_id=u.id) }}">Review</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted" style="font-size:0.88rem">Nobody is waiting.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Recent security and admin events</h2>
+    {% if recent %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead>
+        <tbody>
+        {% for r in recent %}
+          <tr class="{{ 'sec' if is_security(r.event) }}">
+            <td class="muted" style="white-space:nowrap">{{ r.occurred_at|syd }}</td>
+            <td>{{ r.user_email or '—' }}</td>
+            <td><span class="ev ev-{{ r.category }} {{ 'ev-sec' if is_security(r.event) }}">{{ event_label(r.event) }}</span></td>
+            <td class="muted">{{ row_summary(r) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:0.82rem"><a href="{{ url_for('admin.activity') }}" style="color:var(--accent)">Full activity log →</a></p>
+    {% else %}
+    <p class="muted" style="font-size:0.88rem">Nothing yet. Sign-ins, denials and admin changes will appear here.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

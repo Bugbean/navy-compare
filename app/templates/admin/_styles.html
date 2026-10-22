@@ -1,0 +1,21 @@
+<style>
+  /* Styles shared by the admin pages. */
+  .ev { font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:10px; white-space:nowrap;
+        background:var(--border); color:var(--text); }
+  .ev-auth   { background:rgba(80,140,220,0.18); }
+  .ev-admin  { background:var(--tint-accent-hi); }
+  .ev-access { background:var(--tint-bad); }
+  .ev-ai     { background:rgba(150,110,220,0.2); }
+  .ev-page   { background:transparent; color:var(--muted); border:1px solid var(--border); }
+  .ev-sec::before { content:"⚠ "; color:var(--accent); }
+  tr.sec td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
+  /* base.html styles text inputs and selects only */
+  input[type=number], input[type=date] { background:var(--surface); border:1px solid var(--border);
+      color:var(--text); padding:6px 10px; border-radius:4px; font-size:0.875rem; color-scheme:dark light; }
+  .muted { color:var(--muted); }
+  .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  details.row-detail summary { cursor:pointer; color:var(--muted); font-size:0.78rem; }
+  details.row-detail pre { background:var(--bg); border:1px solid var(--border); border-radius:6px;
+                           padding:10px; font-size:0.76rem; white-space:pre-wrap; word-break:break-word;
+                           max-width:640px; margin:6px 0 0; }
+</style>

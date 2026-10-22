@@ -1,0 +1,24 @@
+# The certification set (plan, Testing). Each item is a question with a known right answer, resolved
+# against the fixture snapshot. Week 1: Navy Health's 50 real rep questions; then call recordings; then
+# written items to cover every question type and every chip. Pilot target: 150 items, 95% passing over
+# 3 runs, 0 unsupported claims.
+#
+#   id:             C001, C002, ... never reused
+#   question:       as the rep typed it
+#   source:         navy_health | recording | written
+#   question_type:  one of config/question_types.yaml
+#   slots:          what the router must fill, by slot name
+#   must_cite:      fact ids (from the fixture) the answer must rest on
+#   must_not_cite:  fact ids that would make the answer wrong
+#   plainness:      max_grade (Flesch-Kincaid), max_words (per sentence)
+#   reviewed:       true once the sales lead has checked the expected answer
+items:
+  - id: C001
+    question: does bupa silver plus cover pregnancy
+    source: written
+    question_type: is_covered
+    slots: {policy: Bupa Silver Plus, category: PregnancyBirth}
+    must_cite: []
+    must_not_cite: []
+    plainness: {max_grade: 8, max_words: 20}
+    reviewed: false

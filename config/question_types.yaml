@@ -1,0 +1,22 @@
+# The routable question types (plan, AI layer: free text questions). Each maps to the slots the router
+# must fill and, from week 2, the SQL file that answers it. The final list is settled from the real rep
+# questions Navy Health supplies; adding a type is this entry, a SQL file and 5 certification questions.
+types:
+  head_to_head:   {slots: [comp_policy, state, family_type], reads: comparisons}
+  best_fit:       {slots: [comp_policy, state, family_type], reads: closest_matches}
+  is_covered:     {slots: [policy, category], reads: hospital_cover}
+  waiting_switch: {slots: [comp_policy, navy_policy, category], reads: hospital_cover}
+  extras_item:    {slots: [policy, service, item], reads: extras_benefits}
+  extras_limit:   {slots: [policy, service], reads: extras_benefits}
+  price:          {slots: [navy_policy, comp_policy, state, family_type, excess], reads: variants}
+  discount:       {slots: [navy_policy], reads: funds}
+  fund_fact:      {slots: [fund, attribute], reads: funds}
+  what_changed:   {slots: [policy, since], reads: changes}
+  excess_options: {slots: [policy, state], reads: variants}
+  closed_product: {slots: [policy], reads: policies}
+  eligibility:    {slots: [fund], reads: funds}
+  ambulance:      {slots: [policy], reads: variants}
+  accommodation:  {slots: [policy], reads: variants}
+  # Not a type the router may answer: a question outside the data. Routed here, the answer is the
+  # fixed "I can't answer that from the policy data" and the question is logged for the weekly review.
+  none:           {slots: [], reads: null}

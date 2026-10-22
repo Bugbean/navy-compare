@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}{{ u.full_name or u.email }} — Users — Navy Compare{% endblock %}
+{% block content %}
+<style>
+  .detail { display:grid; grid-template-columns:max-content 1fr; gap:6px 18px; font-size:0.9rem; margin-bottom:1.6rem; }
+  .detail dt { color:var(--muted); }
+  .detail dd { margin:0; }
+  .badge { font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; }
+  .b-pending   { background:var(--tint-accent-hi); color:var(--accent); }
+  .b-owner     { background:var(--tint-accent-hi); color:var(--accent); }
+  .b-approved  { background:var(--tint-good); color:var(--text); }
+  .b-rejected, .b-suspended { background:var(--tint-bad); color:var(--neg-text); }
+  .layer { border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-bottom:14px; background:var(--surface); }
+  .layer-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .layer-head h2 { margin:0; font-size:0.95rem; color:var(--text); }
+  .layer-head button { background:none; border:none; color:var(--accent); cursor:pointer; font-size:0.8rem; padding:0; }
+  .mods { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:8px 16px; }
+  .mods label { display:flex; gap:8px; align-items:center; font-size:0.88rem; cursor:pointer; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:1.4rem; }
+  .actions button { padding:8px 18px; border-radius:18px; font-weight:700; font-size:0.85rem; cursor:pointer; border:1px solid var(--border); }
+  .a-primary { background:var(--accent); color:#000; border-color:var(--accent) !important; }
+  .a-good    { background:var(--tint-good); color:var(--text); }
+  .a-bad     { background:var(--tint-bad); color:var(--neg-text); }
+  .a-plain   { background:var(--surface); color:var(--text); }
+  .saved { background:var(--tint-good); padding:9px 14px; border-radius:6px; margin-bottom:1rem; font-size:0.88rem; }
+  .err { background:var(--tint-bad); color:var(--neg-text); padding:9px 14px; border-radius:6px; margin-bottom:1rem; font-size:0.88rem; }
+  .limits { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; }
+  .limits label { display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:var(--muted); }
+  .limits input { width:110px; }
+  .usage-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px; margin-bottom:1.2rem; }
+  .usage-grid .u { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-size:0.84rem; }
+  .usage-grid .u .k { color:var(--muted); font-size:0.76rem; margin-bottom:4px; }
+  .usage-grid .u .v { font-size:1.2rem; font-weight:700; }
+  h2.sect { font-size:1rem; margin:2rem 0 10px; }
+  .acct .fields { display:flex; gap:1.1rem; flex-wrap:wrap; }
+  .acct .fields label { display:flex; flex-direction:column; gap:4px; font-size:0.82rem; }
+  .acct .fields input { width:250px; padding:6px 8px; font:inherit;
+    border:1px solid var(--border); border-radius:6px;
+    background:var(--panel, transparent); color:var(--text); }
+  .acct .fields input:disabled { opacity:.5; }
+  .acct .hint { font-size:0.78rem; color:var(--muted); margin:0 0 0.7rem; max-width:62ch; }
+  .acct .q { color:var(--muted); font-weight:400; }
+</style>
+
+{% include "admin/_styles.html" %}
+<div class="breadcrumb"><a href="{{ url_for('auth.admin_users') }}">Users</a> / {{ u.full_name or u.email }}</div>
+
+<h1>{{ u.full_name or u.email }} <span class="badge b-{{ u.status }}">{{ u.status }}</span>
+  {% if is_owner %}<span class="badge b-owner" title="This account owns the platform">owner</span>{% endif %}</h1>
+
+{% if locked %}
+<p class="hint" style="max-width:66ch">This is the platform owner's account. You can change their name
+  and phone, and what modules they hold, but not their password, email, status or admin rights — those
+  are the ways an account gets taken away, and there is no way back from losing the one account that
+  can restore the others.</p>
+{% endif %}
+
+{% if saved %}<div class="saved">Saved.</div>{% endif %}
+{% if welcome == 'sent' %}<div class="saved">Welcome email sent to {{ u.email }}, with a link to choose their password.</div>{% endif %}
+{% if welcome == 'failed' %}<div class="err">The welcome email wasn't sent: {{ why or 'unknown error' }}.</div>{% endif %}
+{% if error == 'limits' %}<div class="err">Nothing was saved: AI limits must be whole numbers (0 to 100,000), or blank for the default.</div>{% endif %}
+{% if acct == 'saved' %}<div class="saved">Account details saved.{% if request.args.get('pw') %}
+  Their password is changed and they have been signed out everywhere — tell them the new one yourself,
+  it isn't emailed and can't be read back here.{% endif %}</div>{% endif %}
+{% if acct == 'mismatch' %}<div class="err">Nothing was changed: the two passwords didn't match.</div>{% endif %}
+{% if acct == 'short' %}<div class="err">Nothing was changed: a password must be at least {{ min_password }} characters.</div>{% endif %}
+{% if acct == 'email' %}<div class="err">Nothing was changed: that doesn't look like an email address.</div>{% endif %}
+{% if acct == 'failed' %}<div class="err">Nothing was changed — Supabase refused it. The address may already belong to another account.</div>{% endif %}
+{% if acct == 'owner' or error == 'owner' %}<div class="err">Nothing was changed. This is the platform
+  owner's account — only they can set its password, move its email, suspend it or take its admin
+  rights. Everything else about it is yours to edit.</div>{% endif %}
+
+<dl class="detail">
+  <dt>Invited</dt><dd>{{ u.created_at[:16]|replace('T', ' ') }} UTC</dd>
+  <dt>Email confirmed</dt><dd>{{ (u.confirmed_at[:16]|replace('T', ' ') ~ ' UTC') if u.confirmed_at else 'Not yet — they can\'t sign in until they do' }}</dd>
+  {% if u.decided_at %}<dt>Last decision</dt><dd>{{ u.decided_at[:16]|replace('T', ' ') }} UTC</dd>{% endif %}
+  <dt>Last sign-in</dt><dd>{{ last_sign_in.occurred_at|syd if last_sign_in else 'Never' }}</dd>
+</dl>
+
+{# ── Account details ──
+   Its own form: a rejected password must not take somebody's modules with it. #}
+<form method="post" action="{{ url_for('auth.admin_user_account', user_id=u.id) }}" class="acct">
+  <input type="hidden" name="csrf" value="{{ csrf }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+  <div class="layer">
+    <div class="layer-head"><h2>Account details</h2></div>
+    <p class="hint">Changed here and now — the person isn't emailed and isn't asked to confirm.</p>
+    <div class="fields">
+      <label>Full name
+        <input type="text" name="full_name" value="{{ u.full_name or '' }}" maxlength="200"
+               autocomplete="off" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+      <label>Phone
+        <input type="tel" name="phone" value="{{ u.phone or '' }}" maxlength="40"
+               autocomplete="off" placeholder="+61…" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+      <label>Email <span class="q">— this is what they sign in with</span>
+        <input type="email" name="email" value="{{ u.email }}" maxlength="320"
+               autocomplete="off" {{ 'disabled' if locked }} autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+    </div>
+
+    <div class="layer-head" style="margin-top:1.1rem"><h2>Set a password</h2></div>
+    {% if locked %}
+      <p class="hint">Only the owner can set the password on this account.</p>
+    {% else %}
+      <p class="hint">Type one and it's theirs immediately. They're signed out everywhere and will
+        need it to get back in, so tell them yourself — it is never emailed, and it can't be read
+        back from this page afterwards. Leave both boxes empty to keep their current password.</p>
+      <div class="fields">
+        <label>New password
+          <input type="password" name="new_password" minlength="{{ min_password }}"
+                 autocomplete="new-password" placeholder="at least {{ min_password }} characters" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+        <label>Repeat it
+          <input type="password" name="new_password_confirm" minlength="{{ min_password }}"
+                 autocomplete="new-password" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+      </div>
+    {% endif %}
+
+    <div class="actions" style="margin-top:0.9rem">
+      <button type="submit">Save account details</button>
+    </div>
+  </div>
+</form>
+
+<form method="post">
+  <input type="hidden" name="csrf" value="{{ csrf }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+
+  {% for layer, title in [('rep', 'Rep tools'), ('lead', 'Team lead tools')] %}
+  <div class="layer" data-layer="{{ layer }}">
+    <div class="layer-head">
+      <h2>{{ title }}</h2>
+      <button type="button" class="toggle-all">Select all</button>
+    </div>
+    <div class="mods">
+      {% for m in modules if m.layer == layer %}
+      <label><input type="checkbox" name="modules" value="{{ m.key }}" {{ 'checked' if m.key in granted }} autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"> {{ m.label }}</label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="layer">
+    <label style="display:flex; gap:8px; align-items:center; font-size:0.88rem;">
+      <input type="checkbox" name="is_admin" {{ 'checked' if u.is_admin }} {{ 'disabled' if is_self or locked }} autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+      Administrator — can approve users and change anyone's access, and sees every module
+    </label>
+    {% if is_self or locked %}
+      <input type="hidden" name="is_admin" value="on" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+      <p style="color:var(--muted); font-size:0.78rem; margin:6px 0 0 24px">You can't remove your own admin rights.</p>
+    {% endif %}
+  </div>
+
+  <div class="layer">
+    <div class="layer-head"><h2>AI question limits</h2></div>
+    <p style="color:var(--muted); font-size:0.8rem; margin:0">
+      Leave blank for the default; 0 blocks AI questions for this person entirely.
+    </p>
+    <div class="limits">
+      <label>Per minute <input type="number" min="0" max="100000" name="ai_limit_minute" value="{{ u.ai_limit_minute if u.ai_limit_minute is not none else '' }}" placeholder="default {{ defaults.minute }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+      <label>Per hour <input type="number" min="0" max="100000" name="ai_limit_hour" value="{{ u.ai_limit_hour if u.ai_limit_hour is not none else '' }}" placeholder="default {{ defaults.hour }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+      <label>Per 24 hours <input type="number" min="0" max="100000" name="ai_limit_day" value="{{ u.ai_limit_day if u.ai_limit_day is not none else '' }}" placeholder="default {{ defaults.day }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+    </div>
+  </div>
+
+  <div class="actions">
+    {% if u.status == 'pending' %}
+      <button type="submit" name="action" value="approve" class="a-primary">Approve with these modules</button>
+      {% if not locked %}<button type="submit" name="action" value="reject" class="a-bad">Reject</button>{% endif %}
+    {% elif u.status == 'approved' %}
+      <button type="submit" class="a-primary">Save changes</button>
+      {% if not is_self and not locked %}<button type="submit" name="action" value="suspend" class="a-bad">Suspend</button>{% endif %}
+    {% else %}
+      <button type="submit" name="action" value="reinstate" class="a-good">Approve</button>
+      <button type="submit" class="a-plain">Save modules only</button>
+    {% endif %}
+  </div>
+</form>
+
+{% if u.status == 'approved' and not is_self %}
+<form method="post" action="{{ url_for('auth.admin_user_welcome', user_id=u.id) }}" class="actions" style="margin-top:0.75rem">
+  <input type="hidden" name="csrf" value="{{ csrf }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+  <button type="submit" class="a-plain" title="Emails them a one-time link to choose their password. No password is sent.">Send welcome email</button>
+  <span style="color:var(--muted); font-size:0.8rem">A welcome with a one-time link to choose their password. Sending again replaces the earlier link.</span>
+</form>
+{% endif %}
+
+<h2 class="sect">AI usage</h2>
+<div class="usage-grid">
+  {% for key, s in usage.items() %}
+  <div class="u">
+    <div class="k">{{ s.label }}</div>
+    <div class="v">{{ s.questions }} <span style="font-size:0.8rem; font-weight:400; color:var(--muted)">questions</span></div>
+    <div class="muted" style="font-size:0.78rem">{{ s.cost_usd|usd }} est.{% if s.rate_limited %} · <span style="color:var(--accent)">hit limit {{ s.rate_limited }}×</span>{% endif %}{% if s.offtopic %} · {{ s.offtopic }} off-topic{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="sect" style="display:flex; justify-content:space-between; align-items:baseline">
+  Recent activity
+  <a href="{{ url_for('admin.activity', user=u.id, category='all') }}" style="color:var(--accent); font-size:0.8rem; font-weight:400">Everything for this person →</a>
+</h2>
+{% if recent %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>When</th><th>What</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for r in recent %}
+      <tr class="{{ 'sec' if is_security(r.event) }}">
+        <td class="muted" style="white-space:nowrap">{{ r.occurred_at|syd }}</td>
+        <td><span class="ev ev-{{ r.category }} {{ 'ev-sec' if is_security(r.event) }}">{{ event_label(r.event) }}</span></td>
+        <td class="muted" style="overflow-wrap:anywhere">{{ row_summary(r) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="font-size:0.88rem">No activity recorded yet.</p>
+{% endif %}
+
+<script src="{{ url_for('static', filename='admin_user.js') }}" defer></script>
+{% endblock %}

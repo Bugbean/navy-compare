@@ -1,0 +1,25 @@
+# Builds the image in Cloud Build, so no local Docker daemon is needed.
+# Invoked by deploy.sh:
+#
+#   gcloud builds submit --config deploy/cloudbuild.yaml \
+#       --substitutions=_IMAGE=<full image tag> .
+#
+# What actually gets uploaded is filtered by .gcloudignore.
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'deploy/Dockerfile', '-t', '${_IMAGE}', '.']
+
+  # Import the app from the built image before it is pushed (the `images:`
+  # push below only happens if every step passes).
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args: ['deploy/smoke-check.sh', '${_IMAGE}']
+
+images:
+  - '${_IMAGE}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

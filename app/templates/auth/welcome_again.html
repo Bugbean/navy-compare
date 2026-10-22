@@ -1,0 +1,22 @@
+{% extends "auth/base.html" %}
+{% block title %}Get a new welcome link — Navy Health Policy Compare{% endblock %}
+{% block content %}
+{% if sent %}
+<h1>Check your email</h1>
+<p class="body-text">If that address has an account, a new welcome email is on its way. Its link keeps working until you've chosen your password.</p>
+<div class="links"><a href="{{ url_for('auth.login') }}">Back to sign in</a></div>
+{% else %}
+<h1>{{ 'This link has been used' if spent else 'That link has expired' }}</h1>
+<p class="body-text">
+  {% if spent %}If you've already chosen your password, just sign in. Otherwise a newer welcome email may have replaced this one.
+  {% else %}That was an older welcome link. We'll send you a new one that keeps working until you've chosen your password.{% endif %}
+</p>
+<form method="post" action="{{ url_for('auth.welcome_again') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="email">Your email address</label>
+  <input type="email" id="email" name="email" required autocomplete="email" autofocus>
+  <button type="submit">Send me a new link</button>
+</form>
+<div class="links"><a href="{{ url_for('auth.login') }}">Sign in instead</a></div>
+{% endif %}
+{% endblock %}

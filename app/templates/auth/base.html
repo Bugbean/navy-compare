@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Navy Health Policy Compare{% endblock %}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    background:#f3f5f8; color:#15202e; margin:0; min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:24px 16px;
+  }
+  .card {
+    background:#ffffff; border:1px solid #d9dee6; border-radius:10px;
+    padding:32px 36px; width:100%; max-width:400px;
+  }
+  .brand { text-align:center; margin-bottom:22px; font-weight:700; color:#1f4e8c; letter-spacing:0.02em; }
+  h1 { font-size:1.15rem; font-weight:600; margin:0 0 6px; text-align:center; }
+  .sub { color:#5d6b7d; font-size:0.85rem; text-align:center; margin:0 0 22px; line-height:1.5; }
+  label { display:block; font-size:0.75rem; color:#5d6b7d; text-transform:uppercase;
+          letter-spacing:0.05em; margin:14px 0 5px; }
+  input[type=email], input[type=password], input[type=text], input[type=tel] {
+    width:100%; padding:10px 12px; border-radius:6px; border:1px solid #c5cdd8;
+    background:#ffffff; color:#15202e; font-size:0.95rem;
+  }
+  input:focus { outline:1px solid #1f4e8c; border-color:#1f4e8c; }
+  button {
+    margin-top:20px; width:100%; padding:11px; border-radius:18px; border:none;
+    background:#1f4e8c; color:#fff; font-weight:700; font-size:0.95rem; cursor:pointer;
+  }
+  button:hover { filter:brightness(1.1); }
+  button.ghost { background:transparent; color:#1f4e8c; border:1px solid #1f4e8c; }
+  .err  { background:rgba(163,58,58,0.1); border:1px solid #d9a3a3; color:#a33a3a;
+          padding:9px 12px; border-radius:6px; font-size:0.83rem; margin-top:14px; }
+  .note { background:rgba(31,78,140,0.08); border:1px solid rgba(31,78,140,0.3);
+          color:#1f4e8c; padding:9px 12px; border-radius:6px; font-size:0.83rem; margin-top:14px; }
+  .links { margin-top:20px; text-align:center; font-size:0.83rem; color:#5d6b7d; line-height:1.9; }
+  .links a { color:#1f4e8c; text-decoration:none; }
+  .links a:hover { text-decoration:underline; }
+  .hint { color:#6b7787; font-size:0.75rem; margin-top:5px; }
+  .body-text { color:#3b4757; font-size:0.9rem; line-height:1.6; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">Navy Health Policy Compare</div>
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

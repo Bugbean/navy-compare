@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% import "admin/_tabs.html" as tabbar %}
+{% block title %}Activity — Admin — Navy Compare{% endblock %}
+{% block content %}
+<h1>Activity</h1>
+{% include "admin/_styles.html" %}
+{{ tabbar.activity_tabs("events") }}
+
+<style>
+  .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:1rem; }
+  .filters label { display:flex; flex-direction:column; gap:4px; font-size:0.74rem; color:var(--muted); }
+  .filters input[type=date], .filters input[type=text] { min-width:0; }
+  .filters .actions { display:flex; gap:8px; align-items:center; }
+  .who-chip { background:var(--tint-accent-lo); border:1px solid var(--accent); border-radius:14px;
+              padding:5px 12px; font-size:0.82rem; display:inline-flex; gap:8px; margin-bottom:12px; }
+  .who-chip a { color:var(--accent); text-decoration:none; }
+  .pager { display:flex; gap:12px; align-items:center; margin-top:12px; font-size:0.84rem; }
+  .pager a { color:var(--accent); text-decoration:none; }
+  td.sum { max-width:420px; overflow-wrap:anywhere; }
+</style>
+
+{% if filter_user %}
+<div class="who-chip">Showing {{ filter_user.full_name or filter_user.email }} only
+  <a href="{{ url_for('admin.activity', **({'category': f.category} if f.category else {})) }}" aria-label="Show everyone">✕</a></div>
+{% endif %}
+
+<form class="filters" method="get">
+  {% if f.user %}<input type="hidden" name="user" value="{{ f.user }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">{% endif %}
+  <label>Email contains
+    <input type="text" name="q" value="{{ f.q }}" placeholder="name@example.com" style="width:200px" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+  </label>
+  <label>Category
+    <select name="category" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+      <option value="" {{ 'selected' if not f.category }}>All except page views</option>
+      <option value="all" {{ 'selected' if f.category == 'all' }}>Everything</option>
+      {% for c in categories %}
+      <option value="{{ c }}" {{ 'selected' if f.category == c }}>{{ {'auth': 'Sign-in and accounts', 'admin': 'Admin changes', 'access': 'Access denied', 'ai': 'AI questions', 'page': 'Page views'}[c] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Event
+    <select name="event" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other">
+      <option value="">Any</option>
+      {% for e in events %}<option value="{{ e }}" {{ 'selected' if f.event == e }}>{{ event_label(e) }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>From <input type="date" name="from" value="{{ f['from'] }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+  <label>To <input type="date" name="to" value="{{ f.to }}" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></label>
+  <div class="actions">
+    <button type="submit">Filter</button>
+    <a href="{{ url_for('admin.activity') }}" class="muted" style="font-size:0.82rem">Reset</a>
+  </div>
+</form>
+
+<p class="muted" style="font-size:0.8rem; margin:0 0 8px">
+  {% if total %}{{ first }}–{{ last }} of {{ '{:,}'.format(total) }}{% else %}No matching activity{% endif %} · times are Sydney · kept for 12 months
+</p>
+
+{% if rows %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th><th class="num">Cost</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% set d = r.detail or {} %}
+      <tr class="{{ 'sec' if is_security(r.event) }}">
+        <td class="muted" style="white-space:nowrap">{{ r.occurred_at|syd }}</td>
+        <td>
+          {% if r.user_id %}<a href="{{ url_for('admin.activity', user=r.user_id) }}" style="color:var(--text)">{{ r.user_email }}</a>
+          {% else %}{{ r.user_email or '—' }}{% endif %}
+        </td>
+        <td><span class="ev ev-{{ r.category }} {{ 'ev-sec' if is_security(r.event) }}">{{ event_label(r.event) }}</span></td>
+        <td class="sum">{{ row_summary(r) }}</td>
+        <td class="num muted">{{ r.ai_cost_usd|usd if r.ai_cost_usd is not none else '' }}</td>
+        <td>
+          <details class="row-detail"><summary>More</summary>
+<pre>{{ {'time': r.get('occurred_at'), 'path': r.get('path'), 'method': r.get('method'), 'status': r.get('status'),
+      'ip': r.get('ip'), 'browser': r.get('user_agent'), 'model': r.get('ai_model'),
+      'tokens_in': r.get('ai_tokens_in'), 'tokens_out': r.get('ai_tokens_out'),
+      'latency_ms': r.get('latency_ms'), 'detail': d}|tojson(indent=2) }}</pre>
+          </details>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="pager">
+  {% if page > 1 %}<a href="{{ page_url(page - 1) }}">← Newer</a>{% endif %}
+  <span class="muted">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a href="{{ page_url(page + 1) }}">Older →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

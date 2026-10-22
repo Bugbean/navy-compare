@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Navy Health Policy Compare{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  {% if current_user %}
+  <nav class="topbar">
+    <a class="brand" href="{{ url_for('home') }}">Policy Compare</a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('admin.overview') }}">Admin</a>
+    <a href="{{ url_for('auth.admin_users') }}">Users</a>
+    <a href="{{ url_for('admin.activity') }}">Activity</a>
+    <a href="{{ url_for('admin.feedback') }}">Feedback</a>
+    {% endif %}
+    <span class="spacer"></span>
+    <span class="who">{{ current_user.display_name }}</span>
+    <a href="{{ url_for('auth.logout') }}">Sign out</a>
+  </nav>
+  {% endif %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

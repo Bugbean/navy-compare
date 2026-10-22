@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% import "admin/_tabs.html" as tabbar %}
+{% block title %}AI usage — Activity — Navy Compare{% endblock %}
+{% block content %}
+<h1>Activity</h1>
+{% include "admin/_styles.html" %}
+{{ tabbar.activity_tabs("usage") }}
+
+<style>
+  .periods { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:1rem; }
+  .periods a { padding:6px 14px; border-radius:16px; border:1px solid var(--border);
+               color:var(--muted); text-decoration:none; font-size:0.82rem; }
+  .periods a.on { background:var(--surface); color:var(--text); border-color:var(--accent); }
+  th a { color:inherit; text-decoration:none; }
+  th a.on { color:var(--accent); }
+  tfoot td { font-weight:700; border-top:2px solid var(--border); }
+</style>
+
+<div class="periods">
+  {% for key, (label, _) in periods.items() %}
+  <a href="{{ url_for('admin.usage', period=key, sort=sort) }}" class="{{ 'on' if period == key }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<p class="muted" style="font-size:0.8rem; margin:0 0 10px">
+  Everyone's AI questions. Cost is estimated in USD
+  from Anthropic's published prices. Off-topic refusals count toward the limit because the topic check
+  is itself a paid AI call. Default limit: {{ defaults.minute }} a minute, {{ defaults.hour }} an hour,
+  {{ defaults.day }} in 24 hours; change a person's limit on their user page.
+</p>
+
+{% macro sorth(key, label) -%}
+<a href="{{ url_for('admin.usage', period=period, sort=key) }}" class="{{ 'on' if sort == key }}">{{ label }}{{ ' ↓' if sort == key }}</a>
+{%- endmacro %}
+
+{% if rows %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Person</th>
+        <th class="num">{{ sorth('questions', 'Questions') }}</th>
+        <th class="num">{{ sorth('offtopic', 'Off-topic') }}</th>
+        <th class="num">{{ sorth('limited', 'Hit limit') }}</th>
+        <th class="num">Failed</th>
+        <th class="num">{{ sorth('tokens', 'Tokens in / out') }}</th>
+        <th class="num">{{ sorth('cost', 'Cost (est.)') }}</th>
+        <th class="num">Limit min/hr/24h</th>
+        <th>{{ sorth('last', 'Last question') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      {% set lim = limits.get(r.user_id) %}
+      <tr class="{{ 'sec' if r.rate_limited }}">
+        <td>
+          {% if r.user_id %}
+            <a href="{{ url_for('auth.admin_user', user_id=r.user_id) }}" style="color:var(--text); font-weight:600">{{ r.full_name or r.user_email }}</a>
+            {% if r.full_name %}<br><span class="muted" style="font-size:0.78rem">{{ r.user_email }}</span>{% endif %}
+          {% else %}
+            <span class="muted">No personal account</span><br><span class="muted" style="font-size:0.74rem">a system job, not a person</span>
+          {% endif %}
+        </td>
+        <td class="num">{{ r.questions }}</td>
+        <td class="num">{{ r.offtopic or '' }}</td>
+        <td class="num" style="{{ 'color:var(--accent);font-weight:700' if r.rate_limited }}">{{ r.rate_limited or '' }}</td>
+        <td class="num">{{ r.errors or '' }}</td>
+        <td class="num muted">{{ '{:,}'.format(r.tokens_in|int) }} / {{ '{:,}'.format(r.tokens_out|int) }}</td>
+        <td class="num" style="font-weight:600">{{ r.cost_usd|usd }}</td>
+        <td class="num muted">{% if lim %}{{ lim.minute }}/{{ lim.hour }}/{{ lim.day }}{% else %}—{% endif %}</td>
+        <td class="muted" style="white-space:nowrap">{{ r.last_at|syd }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>Total</td>
+        <td class="num">{{ totals.questions|int }}</td>
+        <td class="num">{{ totals.offtopic|int }}</td>
+        <td class="num">{{ totals.rate_limited|int }}</td>
+        <td class="num">{{ totals.errors|int }}</td>
+        <td class="num muted">{{ '{:,}'.format(totals.tokens_in|int) }} / {{ '{:,}'.format(totals.tokens_out|int) }}</td>
+        <td class="num">{{ totals.cost_usd|usd }}</td>
+        <td></td><td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% else %}
+<p class="muted">No AI questions {{ periods[period][0]|lower }}.</p>
+{% endif %}
+{% endblock %}

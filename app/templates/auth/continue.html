@@ -1,0 +1,17 @@
+{% extends "auth/base.html" %}
+{% set heading = {'signup': 'Confirm your email', 'email': 'Confirm your email', 'magiclink': 'Sign in to Policy Compare',
+                  'recovery': 'Choose a new password',
+                  'invite': 'Welcome to Policy Compare'}[link_type] %}
+{% block title %}{{ heading }} — Navy Health Policy Compare{% endblock %}
+{% block content %}
+{# Opening an emailed link only shows this page; the one-time link is used
+   when the button is pressed, so a mail scanner opening it can't spend it. #}
+<h1>{{ heading }}</h1>
+<p class="body-text">Press Continue to carry on.</p>
+<form method="post" action="{{ url_for('auth.callback') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="token_hash" value="{{ token_hash }}">
+  <input type="hidden" name="type" value="{{ link_type }}">
+  <button type="submit" autofocus>Continue</button>
+</form>
+{% endblock %}
