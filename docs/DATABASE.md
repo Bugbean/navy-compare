@@ -72,6 +72,15 @@ those roles by default; every migration revokes them for everything it
 creates, including `alembic_version`, and this check is how you know that
 held.
 
+Extensions are the one thing the migrations cannot police: Supabase
+installs them as `supabase_admin` with its own grants to `anon` and
+`authenticated`, which the `postgres` role cannot revoke. So every
+extension goes `WITH SCHEMA extensions` (where Supabase keeps its own
+pgcrypto), a schema PostgREST does not expose, and the audit covers
+`public`. Staging was verified this way on 2026-10-23: 31 tables all with
+RLS, no grants to anon/authenticated/PUBLIC in public, pg_trgm in
+`extensions`.
+
 ## Local Postgres without Docker
 
 `docker compose up -d db` is the intended local path. Without Docker, EDB's

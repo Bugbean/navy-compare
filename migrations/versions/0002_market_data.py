@@ -205,8 +205,14 @@ CREATE TABLE policy_aliases (
     hits          INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (policy_id, alias)
 );
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE INDEX policy_aliases_trgm ON policy_aliases USING gin (alias gin_trgm_ops);
+-- Into the extensions schema, as Supabase does for its own (pgcrypto is
+-- there already): Supabase installs extensions as supabase_admin with its
+-- default grants, which our REVOKEs in public cannot touch, and PostgREST
+-- does not expose the extensions schema. The database search_path includes
+-- it, so similarity() etc. resolve unqualified in queries.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+CREATE INDEX policy_aliases_trgm ON policy_aliases USING gin (alias extensions.gin_trgm_ops);
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- The rate card: one row per government <Product> row, holding only what
@@ -628,8 +634,8 @@ GRANT EXECUTE ON FUNCTION hospital_profile_for(BIGINT, BIGINT, TEXT), hospital_c
               variants_for(BIGINT, BIGINT, TEXT)
     TO service_role;
 
--- The sweep (see migration 0001): everything in public, including pg_trgm's
--- own functions, away from the public API roles and to the service role.
+-- The sweep (see migration 0001): everything in public away from the public
+-- API roles and to the service role. pg_trgm lives in extensions, not here.
 REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated;
