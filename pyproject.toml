@@ -30,7 +30,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["app*", "ai*", "jobs*", "identity*"]
+include = ["app*", "ai*", "jobs*", "identity*", "config*"]
 
 [tool.setuptools.package-data]
 app = ["templates/*.html", "templates/*/*.html", "static/*"]

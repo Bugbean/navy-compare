@@ -1,22 +1,30 @@
 # The routable question types (plan, AI layer: free text questions). Each maps to the slots the router
 # must fill and, from week 2, the SQL file that answers it. The final list is settled from the real rep
 # questions Navy Health supplies; adding a type is this entry, a SQL file and 5 certification questions.
+#
+# `reads` names the real table per migrations/versions/0002_market_data.py. Policy-level tables
+# (hospital_cover, extras_*) are read through their *_for(policy, snapshot, state) function, which is
+# the one place the 'ALL'-state rule lives; a SQL file never writes `state IN (...)` itself.
+#
+# Every rate lookup takes dependant_scope as well as family_type: under one name, 'family' is priced
+# separately with and without adult dependants (docs/DATA_MODEL.md). The router fills it from the
+# member profile; the default is the rate without adult dependants.
 types:
-  head_to_head:   {slots: [comp_policy, state, family_type], reads: comparisons}
-  best_fit:       {slots: [comp_policy, state, family_type], reads: closest_matches}
-  is_covered:     {slots: [policy, category], reads: hospital_cover}
-  waiting_switch: {slots: [comp_policy, navy_policy, category], reads: hospital_cover}
-  extras_item:    {slots: [policy, service, item], reads: extras_benefits}
-  extras_limit:   {slots: [policy, service], reads: extras_benefits}
-  price:          {slots: [navy_policy, comp_policy, state, family_type, excess], reads: variants}
-  discount:       {slots: [navy_policy], reads: funds}
-  fund_fact:      {slots: [fund, attribute], reads: funds}
+  head_to_head:   {slots: [comp_policy, state, family_type, dependant_scope], reads: policy_comparisons + variants}
+  best_fit:       {slots: [comp_policy, state, family_type, dependant_scope], reads: closest_matches}
+  is_covered:     {slots: [policy, category], reads: hospital_cover_for}
+  waiting_switch: {slots: [comp_policy, navy_policy, category], reads: hospital_profile_for}
+  extras_item:    {slots: [policy, service, item], reads: extras_benefits_for + extras_limit_groups}
+  extras_limit:   {slots: [policy, service, family_type, dependant_scope], reads: extras_limit_groups}
+  price:          {slots: [navy_policy, comp_policy, state, family_type, dependant_scope, excess], reads: variants_for}
+  discount:       {slots: [navy_policy], reads: null}   # no structured source — see docs/DATA_MODEL.md
+  fund_fact:      {slots: [fund, attribute], reads: funds + fund_dependant_limits}
   what_changed:   {slots: [policy, since], reads: changes}
-  excess_options: {slots: [policy, state], reads: variants}
+  excess_options: {slots: [policy, state], reads: variants_for}
   closed_product: {slots: [policy], reads: policies}
-  eligibility:    {slots: [fund], reads: funds}
-  ambulance:      {slots: [policy], reads: variants}
-  accommodation:  {slots: [policy], reads: variants}
+  eligibility:    {slots: [fund], reads: funds.restriction_details}
+  ambulance:      {slots: [policy], reads: variants_for}
+  accommodation:  {slots: [policy], reads: hospital_profile_for}
   # Not a type the router may answer: a question outside the data. Routed here, the answer is the
   # fixed "I can't answer that from the policy data" and the question is logged for the weekly review.
   none:           {slots: [], reads: null}

@@ -20,7 +20,7 @@ SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_ca
 FORBIDDEN = re.compile(
     r"nbl|icoach|basketball|commentar|broadcast|sportradar|datacore|rosetta|"
     r"\bplayers?\b|\bgames?\b|\bseasons?\b|\bclubs?\b|\bcoach|\bcourt\b|roster|"
-    r"possession|lineup|rebound|\bdunk|layup|three-?point|\bppg\b|ladder|\bleague\b|playoff|"
+    r"possession|lineup|\brebound|\bdunk|layup|three-?point|\bppg\b|\bladder\b|\bleague\b|playoff|"
     r"scraper|play-by-play|\bpbp\b|break.?glass|the platform this came from",
     re.IGNORECASE)
 
