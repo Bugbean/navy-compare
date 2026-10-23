@@ -30,7 +30,6 @@ ROUTE_MODULES = [
     ("/card",            "call_screen"),
     ("/script",          "call_screen"),
     ("/ask",             "call_screen"),
-    ("/compare",         "call_screen"),
     ("/pdf",             "call_screen"),
     ("/outcome",         "call_screen"),
     ("/flag",            "call_screen"),
@@ -81,11 +80,9 @@ def create_app() -> Flask:
     from app.ask import bp as ask_bp
     from app.auth.routes import bp as auth_bp
     from app.auth.routes import csrf_token, log_activity, set_session
-    from app.compare import bp as compare_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(ask_bp)
-    app.register_blueprint(compare_bp)
 
     def _refuse(user, module: str | None, area: str | None = None):
         # Repeated denials for one person are a signal worth seeing: someone

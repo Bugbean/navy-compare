@@ -1,48 +1,66 @@
 {% extends "base.html" %}
 {% block title %}Ask — Navy Compare{% endblock %}
 {% block content %}
-<h1>Ask about a policy</h1>
-<p class="muted">Navy Health is always the base. Figures come from the policy data; each answer lists the facts it rests on.</p>
+<h1>Compare policies</h1>
+<p class="muted">Say what you want to compare, in your own words. Navy Health's policies are the base of every comparison.</p>
 
 <form method="post" action="{{ url_for('ask.ask') }}" style="margin-bottom:1.5rem">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <label for="question"><strong>Your question</strong></label>
-  <textarea id="question" name="question" rows="3" maxlength="500" style="width:100%;margin:.4rem 0"
-            placeholder="e.g. How does Core Silver+ Hospital compare with the HCF Bronze Plus $750 for a couple in NSW?">{{ question }}</textarea>
-  <button type="submit">Ask</button>
+  <textarea name="request" rows="2" maxlength="500" style="width:100%"
+            placeholder="e.g. Our gold hospital policies against HCF bronze, with joint replacements covered">{{ request }}</textarea>
+  <button type="submit">Find policies</button>
 </form>
 
-{% if error %}
-  <p class="error">{{ error }}</p>
-{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 
-{% if result %}
-  <section style="margin-bottom:1.5rem">
-    <h2>Answer</h2>
-    <p style="font-size:1.1rem">{{ result.text }}</p>
-    {% for d in result.disclosures %}<p class="muted">{{ d }}</p>{% endfor %}
-    {% if result.unresolved %}<p class="muted">Still needed: {{ result.unresolved | join('; ') }}</p>{% endif %}
-    <p class="muted">Question type: {{ result.question_type }} · outcome: {{ result.outcome }}</p>
-  </section>
+{% if plan %}
+  <p class="muted">
+    I read this as:
+    {% set parts = [] %}
+    {% if plan.navy_all %}{% set _ = parts.append('all Navy Health policies') %}{% elif plan.navy_terms %}{% set _ = parts.append('Navy Health policies matching ' ~ (plan.navy_terms | join(', '))) %}{% endif %}
+    {% if plan.comp_all %}{% set _ = parts.append('all competitor policies') %}{% elif plan.comp_terms %}{% set _ = parts.append('competitor policies matching ' ~ (plan.comp_terms | join(', '))) %}{% endif %}
+    {% if plan.features %}{% set _ = parts.append('covering ' ~ (plan.features | join(', '))) %}{% endif %}
+    {% if plan.product_type %}{% set _ = parts.append(plan.product_type ~ ' policies') %}{% endif %}
+    {{ parts | join('; ') or 'nothing I can search for yet' }}.
+  </p>
 
-  {% if result.facts %}
-  <section>
-    <h2>Facts behind this answer</h2>
-    <table>
-      <thead><tr><th>Fact</th><th>Type</th><th>Value</th><th>Policies</th><th>Complete</th></tr></thead>
-      <tbody>
-      {% for f in result.facts %}
-        <tr>
-          <td><code>{{ f.fact_id }}</code></td>
-          <td>{{ f.type }}</td>
-          <td>{{ f.value }}{% if f.unit %} {{ f.unit }}{% endif %}</td>
-          <td>{{ f.names | join(' / ') }}</td>
-          <td>{{ 'yes' if f.coverage.complete_for_claim else ('no: ' ~ (f.coverage.reason or '')) }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
+  {% if groups and groups | selectattr('total') | list %}
+  <form method="post" action="{{ url_for('ask.ask_compare') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for f in plan.features %}<input type="hidden" name="feature" value="{{ f }}">{% endfor %}
+    <p>
+      <label>State
+        <select name="state">{% for s in ['NSW','VIC','QLD','SA','WA','TAS','NT','ACT'] %}
+          <option {% if s == (plan.state or 'NSW') %}selected{% endif %}>{{ s }}</option>{% endfor %}
+        </select>
+      </label>
+      <label style="margin-left:1rem">Household
+        <select name="family">{% for f in ['single','couple','family','single_parent','dependants_only'] %}
+          <option value="{{ f }}" {% if f == (plan.family_type or 'couple') %}selected{% endif %}>{{ f | replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+    </p>
+
+    {% for g in groups %}
+      <section style="margin-bottom:1.2rem">
+        <h2>{{ g.label }} <span class="muted">({{ g.total }} found{% if g.reason %} · {{ g.reason }}{% endif %})</span></h2>
+        {% if g.policies %}
+          {% for p in g.policies %}
+            <label style="display:block;padding:.2rem 0">
+              <input type="checkbox" name="policy" value="{{ p.id }}" {% if p.is_navy %}data-navy="1"{% endif %}>
+              {{ p.current_name }} <span class="muted">· {{ p.fund_name }} · {{ p.product_type }}</span>
+            </label>
+          {% endfor %}
+        {% else %}
+          <p class="muted">None found for this request.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+    <button type="submit">Compare the ticked policies</button>
+    <p class="muted">Up to 10 policies at a time. Navy Health's policies are shown first.</p>
+  </form>
+  {% elif plan %}
+    <p class="error">No policies matched. Try a policy name, a fund, or fewer features.</p>
   {% endif %}
 {% endif %}
 {% endblock %}

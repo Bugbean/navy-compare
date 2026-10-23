@@ -1,8 +1,11 @@
-"""Feature comparison: the policies side by side, feature by feature.
+"""Feature comparison of any number of policies, feature by feature.
 
-No model is involved. The table is read straight from the snapshot through the same resolvers
-the question engine uses, so what a rep sees is what the data says. Navy Health's policy is always
-the first column. A row where the two sides agree is marked so the rep can see the differences first.
+No model is involved: the table is read from the snapshot through the same resolvers the question
+engine uses. Navy Health's policies come first, then the others, each in the order given. A row is
+marked as agreeing when every column holds the same value, so the differences are what stands out.
+
+Premiums are compared only at the same excess level: a column with no rate at a given excess says
+so, rather than being set against another policy's premium at a different excess.
 """
 from __future__ import annotations
 
@@ -10,45 +13,33 @@ from typing import Any, Optional
 
 from config.reference import CLINICAL_CATEGORIES, EXTRAS_SERVICES
 from engine import queries as q
-from engine.db import Snapshot
+from engine.db import EngineError, Snapshot
 
 NOT_OFFERED = "not offered"
+NO_RATE = "no rate at this excess"
 
-_COVER_ROWS = """
-SELECT n.category, n.cover AS navy, c.cover AS comp
-FROM hospital_cover_for(:navy, :snap, :state) n
-FULL JOIN hospital_cover_for(:comp, :snap, :state) c ON c.category = n.category
+_COVER = """
+SELECT category, cover FROM hospital_cover_for(:policy, :snap, :state)
 """
 
-_EXTRAS_ROWS = """
-SELECT coalesce(n.service, c.service) AS service,
-       n.covered AS navy, c.covered AS comp,
-       n.wait_months AS navy_wait, c.wait_months AS comp_wait
-FROM extras_services_for(:navy, :snap, :state, :family) n
-FULL JOIN extras_services_for(:comp, :snap, :state, :family) c ON c.service = n.service
+_EXTRAS = """
+SELECT service, covered FROM extras_services_for(:policy, :snap, :state, :family)
 """
 
 _AMBULANCE = """
-SELECT DISTINCT ambulance_cover FROM variants_for(:policy, :snap, :state)
-WHERE status = 'Open'
+SELECT DISTINCT ambulance_cover FROM variants_for(:policy, :snap, :state) WHERE status = 'Open'
 """
 
 _PREMIUMS = """
-SELECT excess_option, min(premium_month) AS premium, min(excess_type) AS excess_type
+SELECT excess_option, min(premium_month) AS premium
 FROM variants_for(:policy, :snap, :state)
 WHERE status = 'Open' AND family_type = :family AND dependant_scope = :scope
 GROUP BY excess_option ORDER BY excess_option
 """
 
 
-def _cover_word(value: Optional[str]) -> str:
-    return {"Covered": "covered", "Restricted": "restricted", "NotCovered": "not covered"}.get(value or "", NOT_OFFERED)
-
-
-def _row(feature: str, navy: Any, comp: Any, *, fmt=str, missing: str = NOT_OFFERED) -> dict:
-    navy_v = missing if navy is None else fmt(navy)
-    comp_v = missing if comp is None else fmt(comp)
-    return {"feature": feature, "navy": navy_v, "comp": comp_v, "same": navy_v == comp_v}
+def _cover_word(v: Optional[str]) -> str:
+    return {"Covered": "covered", "Restricted": "restricted", "NotCovered": "not covered"}.get(v or "", NOT_OFFERED)
 
 
 def _money(v: Any) -> str:
@@ -59,72 +50,74 @@ def _months(v: Any) -> str:
     return f"{v} months"
 
 
-def compare(db: Snapshot, *, navy: dict, comp: dict, state: str, family: str, scope: str) -> dict:
-    """Every feature the two policies can be compared on, in sections. `navy` and `comp` are policy rows
-    (id, current_name, product_type)."""
+def _row(feature: str, values: list[Optional[str]], missing: str = NOT_OFFERED) -> dict:
+    cells = [missing if v is None else v for v in values]
+    return {"feature": feature, "cells": cells, "same": len(set(cells)) == 1}
+
+
+def order(policies: list[dict]) -> list[dict]:
+    """Navy Health first, then the rest, each group in the order given."""
+    return [p for p in policies if p["is_navy"]] + [p for p in policies if not p["is_navy"]]
+
+
+def compare_many(db: Snapshot, *, policies: list[dict], state: str, family: str, scope: str) -> dict:
+    """The table for these policies. Each policy is a dict with id, current_name, product_type, is_navy,
+    and fund_name for display."""
+    if not policies:
+        raise EngineError("choose at least one policy to compare")
     state, family, scope = q._state(state), q._family(family), q._scope(scope)
+    cols = order(policies)
     snap = db.live_snapshot_id()
+    base = {"snap": snap, "state": state}
     sections: list[dict] = []
-    both = {"navy": navy["id"], "comp": comp["id"], "snap": snap, "state": state}
 
-    if navy["product_type"] in ("hospital", "combined") or comp["product_type"] in ("hospital", "combined"):
-        prof = {}
-        for side, pid in (("navy", navy["id"]), ("comp", comp["id"])):
-            r = db.rows(q._PROFILE, {"policy": pid, "snap": snap, "state": state})
-            prof[side] = r[0] if r else None
-        rows = []
-        if prof["navy"] or prof["comp"]:
-            n, c = prof["navy"] or {}, prof["comp"] or {}
-            rows.append(_row("Hospital tier", n.get("hospital_tier"), c.get("hospital_tier")))
-            rows.append(_row("Accommodation", n.get("accommodation"), c.get("accommodation")))
-            for label, field in (("Pre-existing condition wait", "wait_pre_existing_months"),
-                                 ("Other conditions wait", "wait_other_months"),
-                                 ("Sub-acute wait", "wait_sub_acute_months"),
-                                 ("Pregnancy wait", "wait_pregnancy_months")):
-                rows.append(_row(label, n.get(field), c.get(field), fmt=_months))
+    if any(p["product_type"] in ("hospital", "combined") for p in cols):
+        profiles = []
+        covers = []
+        for p in cols:
+            found = db.rows(q._PROFILE, {"policy": p["id"], **base})
+            profiles.append(found[0] if found else {})
+            covers.append({r["category"]: r["cover"] for r in db.rows(_COVER, {"policy": p["id"], **base})})
+        rows = [
+            _row("Hospital tier", [pr.get("hospital_tier") for pr in profiles]),
+            _row("Accommodation", [pr.get("accommodation") for pr in profiles]),
+        ]
+        for label, field in (("Pre-existing condition wait", "wait_pre_existing_months"),
+                             ("Other conditions wait", "wait_other_months"),
+                             ("Sub-acute wait", "wait_sub_acute_months"),
+                             ("Pregnancy wait", "wait_pregnancy_months")):
+            rows.append(_row(label, [None if pr.get(field) is None else f"{pr[field]} months" for pr in profiles]))
         sections.append({"title": "Hospital", "rows": rows})
-
-        cover_rows = db.rows(_COVER_ROWS, both)
-        by_cat = {r["category"]: r for r in cover_rows}
         sections.append({"title": "Clinical categories", "rows": [
-            _row(cat, by_cat[cat]["navy"] if cat in by_cat else None,
-                 by_cat[cat]["comp"] if cat in by_cat else None, fmt=_cover_word)
-            for cat in CLINICAL_CATEGORIES if cat in by_cat]})
+            _row(cat, [_cover_word(c.get(cat)) if c else None for c in covers])
+            for cat in CLINICAL_CATEGORIES if any(cat in c for c in covers)]})
 
-    if navy["product_type"] in ("extras", "combined") or comp["product_type"] in ("extras", "combined"):
-        ext = {r["service"]: r for r in db.rows(_EXTRAS_ROWS, {**both, "family": family})}
+    if any(p["product_type"] in ("extras", "combined") for p in cols):
+        per = [{r["service"]: r["covered"] for r in db.rows(_EXTRAS, {"policy": p["id"], **base, "family": family})}
+               for p in cols]
         sections.append({"title": "Extras", "rows": [
-            _row(svc, ext[svc]["navy"] if svc in ext else None, ext[svc]["comp"] if svc in ext else None,
-                 fmt=lambda v: "covered" if v else "not covered")
-            for svc in EXTRAS_SERVICES if svc in ext]})
+            _row(svc, [(("covered" if d[svc] else "not covered") if svc in d else None) for d in per])
+            for svc in EXTRAS_SERVICES if any(svc in d for d in per)]})
 
-    premium_rows = []
-    navy_prem = db.rows(_PREMIUMS, {"policy": navy["id"], "snap": snap, "state": state, "family": family, "scope": scope})
-    comp_prem = db.rows(_PREMIUMS, {"policy": comp["id"], "snap": snap, "state": state, "family": family, "scope": scope})
-    n_by = {round(float(r["excess_option"] or 0), 2): r for r in navy_prem}
-    c_by = {round(float(r["excess_option"] or 0), 2): r for r in comp_prem}
-    for ex in sorted(set(n_by) | set(c_by)):
-        n, c = n_by.get(ex), c_by.get(ex)
-        label = f"Premium a month, ${ex:,.0f} excess" if ex else "Premium a month, no excess"
-        premium_rows.append(_row(label, n and n["premium"], c and c["premium"], fmt=_money,
-                                 missing="no rate at this excess"))
-    if not premium_rows:
-        premium_rows.append(_row("Premium a month", None, None, fmt=_money))
-    sections.append({"title": f"Price for this household ({family.replace('_', ' ')}, {state})",
-                     "rows": premium_rows})
+    premiums = [{round(float(r["excess_option"] or 0), 2): r["premium"] for r in db.rows(
+        _PREMIUMS, {"policy": p["id"], **base, "family": family, "scope": scope})} for p in cols]
+    excesses = sorted({ex for d in premiums for ex in d})
+    price_rows = [_row(f"Premium a month, ${ex:,.0f} excess" if ex else "Premium a month, no excess",
+                       [_money(d[ex]) if ex in d else None for d in premiums], missing=NO_RATE)
+                  for ex in excesses]
+    if not price_rows:
+        price_rows = [_row("Premium a month", [None] * len(cols), missing=NO_RATE)]
+    sections.append({"title": f"Price for this household ({family.replace('_', ' ')}, {state})", "rows": price_rows})
 
-    amb = {"navy": db.rows(_AMBULANCE, {"policy": navy["id"], "snap": snap, "state": state, "family": family, "scope": scope}),
-           "comp": db.rows(_AMBULANCE, {"policy": comp["id"], "snap": snap, "state": state, "family": family, "scope": scope})}
-    sections.append({"title": "Ambulance", "rows": [
-        _row("Ambulance cover", amb["navy"][0]["ambulance_cover"] if amb["navy"] else None,
-             amb["comp"][0]["ambulance_cover"] if amb["comp"] else None)]})
+    ambulance = []
+    for p in cols:
+        found = [r["ambulance_cover"] for r in db.rows(_AMBULANCE, {"policy": p["id"], **base})]
+        ambulance.append(", ".join(sorted(found)) if found else None)
+    sections.append({"title": "Ambulance", "rows": [_row("Ambulance cover", ambulance)]})
 
     return {
-        "navy": navy["current_name"],
-        "comp": comp["current_name"],
-        "state": state,
-        "family": family,
-        "scope": scope,
-        "snapshot": snap,
+        "columns": [{"id": p["id"], "name": p["current_name"], "fund": p.get("fund_name", ""),
+                     "is_navy": p["is_navy"]} for p in cols],
+        "state": state, "family": family, "scope": scope, "snapshot": snap,
         "sections": [s for s in sections if s["rows"]],
     }
