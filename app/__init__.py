@@ -77,10 +77,12 @@ def create_app() -> Flask:
     app.config.update(SESSION_COOKIE_SECURE=auth.COOKIE_SECURE, SESSION_COOKIE_SAMESITE="Lax")
 
     from app.admin.routes import bp as admin_bp
+    from app.ask import bp as ask_bp
     from app.auth.routes import bp as auth_bp
     from app.auth.routes import csrf_token, log_activity, set_session
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(ask_bp)
 
     def _refuse(user, module: str | None, area: str | None = None):
         # Repeated denials for one person are a signal worth seeing: someone
@@ -100,10 +102,17 @@ def create_app() -> Flask:
         return render_template("forbidden.html", module_label=label,
                                first_allowed=_first_allowed(user)), 403
 
+    from app import devmode
+    if devmode.bypass_enabled():
+        log.warning("NAVY_DEV_NO_LOGIN is set: sign-in is off for this local server")
+
     @app.before_request
     def _authorise():
         path = request.path
         g.new_session = None
+        if devmode.bypass_enabled():
+            g.user = devmode.dev_user()
+            return None
         resolved = auth.resolve(request.cookies.get(auth.COOKIE_ACCESS),
                                 request.cookies.get(auth.COOKIE_REFRESH))
         g.user, g.new_session = resolved.user, resolved.new_session

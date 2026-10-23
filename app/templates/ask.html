@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Ask — Navy Compare{% endblock %}
+{% block content %}
+<h1>Ask about a policy</h1>
+<p class="muted">Navy Health is always the base. Figures come from the policy data; each answer lists the facts it rests on.</p>
+
+<form method="post" action="{{ url_for('ask.ask') }}" style="margin-bottom:1.5rem">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="question"><strong>Your question</strong></label>
+  <textarea id="question" name="question" rows="3" maxlength="500" style="width:100%;margin:.4rem 0"
+            placeholder="e.g. How does Core Silver+ Hospital compare with the HCF Bronze Plus $750 for a couple in NSW?">{{ question }}</textarea>
+  <button type="submit">Ask</button>
+</form>
+
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
+
+{% if result %}
+  <section style="margin-bottom:1.5rem">
+    <h2>Answer</h2>
+    <p style="font-size:1.1rem">{{ result.text }}</p>
+    {% for d in result.disclosures %}<p class="muted">{{ d }}</p>{% endfor %}
+    {% if result.unresolved %}<p class="muted">Still needed: {{ result.unresolved | join('; ') }}</p>{% endif %}
+    <p class="muted">Question type: {{ result.question_type }} · outcome: {{ result.outcome }}</p>
+  </section>
+
+  {% if result.facts %}
+  <section>
+    <h2>Facts behind this answer</h2>
+    <table>
+      <thead><tr><th>Fact</th><th>Type</th><th>Value</th><th>Policies</th><th>Complete</th></tr></thead>
+      <tbody>
+      {% for f in result.facts %}
+        <tr>
+          <td><code>{{ f.fact_id }}</code></td>
+          <td>{{ f.type }}</td>
+          <td>{{ f.value }}{% if f.unit %} {{ f.unit }}{% endif %}</td>
+          <td>{{ f.names | join(' / ') }}</td>
+          <td>{{ 'yes' if f.coverage.complete_for_claim else ('no: ' ~ (f.coverage.reason or '')) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+{% endif %}
+{% endblock %}

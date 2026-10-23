@@ -270,8 +270,23 @@ def head_to_head(db: Snapshot, *, navy_policy_id: int, comp_policy_id: int, stat
                              unit="services", text="extras services covered", names=names, scope=scope_dict,
                              complete=True, table="extras_services", snapshot=snap))
 
-    out.extend(price(db, navy_policy_id=navy_policy_id, comp_policy_id=comp_policy_id, state=state,
-                     family=family, scope=scope))
+    prices = price(db, navy_policy_id=navy_policy_id, comp_policy_id=comp_policy_id, state=state,
+                   family=family, scope=scope)
+    out.extend(prices)
+
+    # Premiums are only comparable at the same excess. When the two policies share no excess option, the
+    # answer must say so, with both excesses, or a rep will read a gap that is really a difference in excess.
+    navy_excess = sorted({f["scope"]["excess"] for f in prices
+                          if f["subject"].get("side") == "navy" and "excess" in f["scope"]})
+    comp_excess = sorted({f["scope"]["excess"] for f in prices
+                          if f["subject"].get("side") == "comp" and "excess" in f["scope"]})
+    if navy_excess and comp_excess and not set(navy_excess) & set(comp_excess):
+        out.append(_fact(
+            f"excess_mismatch.{navy_policy_id}.{comp_policy_id}.{state}.{family}", "excess_mismatch",
+            subject=subject, value={"navy": navy_excess[0], "comp": comp_excess[0]}, unit="AUD",
+            text="the premiums are at different excess levels", names=names, scope=scope_dict, complete=True,
+            claimable={"navy_excess_options": navy_excess, "comp_excess_options": comp_excess},
+            table="variants", snapshot=snap))
     return out
 
 

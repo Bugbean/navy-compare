@@ -19,6 +19,9 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "db", "postgres"}
 
 # Before collection, so a module-level create_client() in any test file gets
 # the unusable values rather than the real ones.
+# The local sign-in bypass (.env) must never switch off the auth tests.
+os.environ["NAVY_DEV_NO_LOGIN"] = "0"
+
 if os.environ.get("TEST_USE_REAL_DB") != "1":
     db_host = urlparse(os.environ.get("DATABASE_URL", "")).hostname
     if db_host and db_host not in LOCAL_HOSTS:

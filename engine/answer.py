@@ -57,6 +57,7 @@ class Routed:
     question_type: str
     confidence: float
     slots: dict[str, Any] = field(default_factory=dict)
+    usage: Any = None
 
 
 @dataclass
@@ -67,6 +68,8 @@ class Answer:
     unresolved: list[str] = field(default_factory=list)
     disclosures: list[str] = field(default_factory=list)
     facts: list[dict] = field(default_factory=list)
+    router_usage: Any = None
+    writer_usage: Any = None
 
 
 def route(question: str, *, client: Any, model: str) -> Routed:
@@ -83,9 +86,10 @@ def route(question: str, *, client: Any, model: str) -> Routed:
             if qt not in QUESTION_TYPES:
                 qt = "none"
             conf = float(data.get("confidence", 0))
-            return Routed(question_type=qt, confidence=conf, slots={k: v for k, v in data.items()
-                                                                    if k not in ("question_type", "confidence")})
-    return Routed(question_type="none", confidence=0.0)
+            return Routed(question_type=qt, confidence=conf,
+                          slots={k: v for k, v in data.items() if k not in ("question_type", "confidence")},
+                          usage=getattr(response, "usage", None))
+    return Routed(question_type="none", confidence=0.0, usage=getattr(response, "usage", None))
 
 
 # ── names: the policy the rep meant, and only when it is clear ────────────────────
@@ -182,7 +186,7 @@ def answer(question: str, *, db: Snapshot, client: Any, model: str,
     ai.compose.compose, passed in so the call can be tested without a model."""
     routed = route(question, client=client, model=model)
     if routed.question_type == "none" or routed.confidence < 0.6:
-        return Answer(text=CANNOT_ANSWER, question_type="none", outcome="declined")
+        return Answer(text=CANNOT_ANSWER, question_type="none", outcome="declined", router_usage=routed.usage)
 
     unresolved: list[str] = []
     # A closed product is still a thing a rep asks about ("is it still sold?"), so only that type searches closed ones.
@@ -195,13 +199,13 @@ def answer(question: str, *, db: Snapshot, client: Any, model: str,
         unresolved.append("which competitor policy was meant")
     if unresolved:
         return Answer(text="I need to know: " + "; ".join(unresolved) + ".", question_type=routed.question_type,
-                      outcome="clarify", unresolved=unresolved)
+                      outcome="clarify", unresolved=unresolved, router_usage=routed.usage)
 
     disclosures: list[str] = []
     state = routed.slots.get("state") or ""
     if not state and routed.question_type != "closed_product":
         return Answer(text="Which state? Premiums and cover differ by state.", question_type=routed.question_type,
-                      outcome="clarify", unresolved=["the state"])
+                      outcome="clarify", unresolved=["the state"], router_usage=routed.usage)
     family = routed.slots.get("family_type") or DEFAULT_FAMILY
     if not routed.slots.get("family_type") and routed.question_type in ("price", "head_to_head", "best_fit", "excess_options"):
         disclosures.append(f"Assumed a {family} household; the premium is for that household.")
@@ -213,17 +217,18 @@ def answer(question: str, *, db: Snapshot, client: Any, model: str,
         facts = dispatch(db, routed, navy, comp, household)
     except EngineError as exc:
         return Answer(text=f"I need one more detail: {exc}.", question_type=routed.question_type,
-                      outcome="clarify", unresolved=[str(exc)])
+                      outcome="clarify", unresolved=[str(exc)], router_usage=routed.usage)
 
     if not facts:
-        return Answer(text=CANNOT_ANSWER, question_type=routed.question_type, outcome="declined", facts=[])
+        return Answer(text=CANNOT_ANSWER, question_type=routed.question_type, outcome="declined", facts=[],
+                      router_usage=routed.usage)
 
     pack = EvidencePack.of(_validated(facts), name=routed.question_type)
     result = compose(pack, client=client, system=ROUTER_PROMPT.parent.joinpath("writer_v1.md").read_text(encoding="utf-8"),
                      question=question, context={**(context or {}), "disclosures": disclosures})
     text = result.text or CANNOT_ANSWER
     return Answer(text=text, question_type=routed.question_type, outcome=result.outcome,
-                  disclosures=disclosures, facts=facts)
+                  disclosures=disclosures, facts=facts, router_usage=routed.usage, writer_usage=result.usage)
 
 
 def _validated(facts: list[dict]) -> list:
