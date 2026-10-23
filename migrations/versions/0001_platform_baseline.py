@@ -290,7 +290,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE
     ON user_profiles, modules, user_module_access, activity_log, feedback, job_runs
     TO service_role;
 GRANT SELECT ON v_user_last_activity TO service_role;
+-- Supabase's default privileges grant every new public table and sequence
+-- to anon/authenticated. Our own tables are revoked above; sequences too,
+-- and alembic_version, which Alembic creates itself before this runs.
+REVOKE ALL ON SEQUENCE activity_log_id_seq, feedback_id_seq, job_runs_id_seq FROM anon, authenticated;
 GRANT USAGE, SELECT ON SEQUENCE activity_log_id_seq, feedback_id_seq, job_runs_id_seq TO service_role;
+ALTER TABLE alembic_version ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON alembic_version FROM anon, authenticated;
 
 -- Postgres grants EXECUTE to PUBLIC by default; without the revoke anyone
 -- holding the anon key could call the admin summaries through PostgREST.
@@ -300,6 +306,18 @@ REVOKE ALL ON FUNCTION fn_ai_usage_by_user(TIMESTAMPTZ) FROM PUBLIC, anon, authe
 GRANT EXECUTE ON FUNCTION fn_ai_usage_counts(UUID)         TO service_role;
 GRANT EXECUTE ON FUNCTION fn_admin_overview()              TO service_role;
 GRANT EXECUTE ON FUNCTION fn_ai_usage_by_user(TIMESTAMPTZ) TO service_role;
+
+-- The sweep. Postgres grants EXECUTE on every function to PUBLIC by default
+-- (which anon inherits), and Supabase's default privileges grant every new
+-- public table and sequence to anon/authenticated. Nothing in this app is
+-- read through the public Supabase API, so every migration ends by revoking
+-- everything in public from those roles — including trigger functions and
+-- extension functions the explicit statements above did not name — and
+-- granting it to the service role the app actually connects as.
+REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
 """
 
 DOWNGRADE = r"""

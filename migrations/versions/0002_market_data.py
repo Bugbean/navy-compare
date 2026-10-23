@@ -609,6 +609,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE
        overrides, policy_comparisons, closest_matches, hospital_agreements,
        hospital_agreement_funds
     TO service_role;
+-- Supabase's default privileges grant new sequences to anon/authenticated as
+-- well as tables; revoke those too, so nothing in public is reachable.
+REVOKE ALL ON SEQUENCE
+    snapshots_id_seq, policies_id_seq, variants_id_seq, extras_limit_groups_id_seq,
+    identity_queue_id_seq, changes_id_seq, overrides_id_seq
+    FROM anon, authenticated;
 GRANT USAGE, SELECT ON SEQUENCE
     snapshots_id_seq, policies_id_seq, variants_id_seq, extras_limit_groups_id_seq,
     identity_queue_id_seq, changes_id_seq, overrides_id_seq
@@ -621,6 +627,13 @@ GRANT EXECUTE ON FUNCTION hospital_profile_for(BIGINT, BIGINT, TEXT), hospital_c
               extras_services_for(BIGINT, BIGINT, TEXT), extras_benefits_for(BIGINT, BIGINT, TEXT),
               variants_for(BIGINT, BIGINT, TEXT)
     TO service_role;
+
+-- The sweep (see migration 0001): everything in public, including pg_trgm's
+-- own functions, away from the public API roles and to the service role.
+REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
 """
 
 DOWNGRADE = r"""
