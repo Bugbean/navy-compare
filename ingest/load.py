@@ -65,9 +65,19 @@ class Db:
         self._run(["-q", "-c", sql])
 
     def copy_csv(self, table: str, columns: tuple[str, ...], path: str) -> None:
+        """COPY one staged CSV. The statement timeout is lifted in the same
+        session: a 200 MB upload over a pooled connection outlasts the role's
+        default, and a timeout here would reject a release that is fine."""
         cols = ", ".join(columns)
         forward = path.replace("\\", "/")
-        self._run(["-q", "-c", f"\\copy {table} ({cols}) FROM '{forward}' WITH (FORMAT csv, HEADER true, ENCODING 'UTF8')"])
+        script = (
+            "SET statement_timeout = 0;\n"
+            f"\\copy {table} ({cols}) FROM '{forward}' WITH (FORMAT csv, HEADER true, ENCODING 'UTF8')\n"
+        )
+        script_path = os.path.join(os.path.dirname(path), f"copy_{table}.sql")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script)
+        self._run(["-q", "-f", script_path])
 
     def run_files(self, files: list[str], variables: dict[str, object]) -> str:
         """Run SQL files in one transaction, in order. Returns psql's output so

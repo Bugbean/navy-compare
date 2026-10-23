@@ -18,6 +18,10 @@
 -- Gates use pg_temp.gate(), which raises with the message when the condition
 -- is false. Nothing here guesses: a release that does not fit fails loudly.
 
+-- A full release is one long transaction. Hosted Postgres sets a statement
+-- timeout on the pooled role; this session is the loader, not an API request.
+SET statement_timeout = 0;
+
 CREATE FUNCTION pg_temp.gate(ok boolean, msg text) RETURNS void
 LANGUAGE plpgsql AS $f$
 BEGIN
