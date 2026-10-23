@@ -43,7 +43,7 @@ class StubWriter:
 
     def __call__(self, pack, **kwargs):
         self.packs.append(pack)
-        return NS(text="written", outcome="pass")
+        return NS(text="written", outcome="pass", usage=None)
 
 
 def _ask(route_input: dict, db, writer=None):
