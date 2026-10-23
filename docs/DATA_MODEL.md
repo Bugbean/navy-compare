@@ -11,8 +11,8 @@ Method: streamed every file with `lxml.etree.iterparse` (never loaded whole —
 the two Combined files are 528 MB and 658 MB), counted every element and
 attribute value across the full file (not a sample), and cross-checked every
 finding against `PHOLSchema-V3.1.xsd` and `PHOL-Lists-V3.1.xsd`'s own
-enumerations and doc comments. Navy Health's own 280 Hospital, 280 Extras and
-875 Combined rows were used to ground every structural claim in a real,
+enumerations and doc comments. Navy Health's own 280 Hospital, 105 Extras and
+875 Combined open rows (the earlier "280 Extras" was wrong: the file holds 105) were used to ground every structural claim in a real,
 checkable example.
 
 ## The identity key is the opposite of what the plan assumed
@@ -42,7 +42,7 @@ Both IDs are unique **per row** within one file (confirmed: 31,864 distinct
 rows) — i.e. per (fund, state, family composition, tier/excess), not per
 marketed policy. Neither identifies "Prime Silver+ Hospital 750 across all
 states and family types" as one thing; that grouping is `policies`, built by
-the resolver from name + tier within a snapshot (see below), not read
+the resolver from fund, brand, product group and name within a snapshot (see below), not read
 directly off any one government field.
 
 ## `family_type` does not exist as a field — it is derived
@@ -305,8 +305,8 @@ every component fingerprinted per row, then grouped by (fund, name):
 | Tier / accommodation / flags | 1,238 | 13 | state |
 | Excess amounts | 666 | 585 | household (513), the per-policy cap doubling for two adults |
 | 27 extras services covered | 507 of 508 | 1 | state |
-| Extras benefit amounts | 473 | 35 | state (33) |
-| Extras limit amounts | 157 | 351 | household (**351**), never state (0) |
+| Extras benefit amounts | 473 | 35 | state (33) **and household (24 product families price single-person benefits and waits apart)** |
+| Extras limit amounts | 157 | 351 | household (**351**) **and state (113 household-and-title groups, e.g. NT and SA at $500 per person where other states have $400)** |
 
 Combined Open (1,139 products) and Hospital Closed (503) show the same
 pattern. So the data has a two-level hierarchy the feed flattens: a
@@ -403,3 +403,38 @@ claim to.
 Fact's `text` field rather than scanned for a figure to bind. The first pass
 at this schema omitted both columns entirely; added to `funds` as
 `restriction_hint` / `restriction_details`.
+
+## Corrections from the first full load (2026-10-23)
+
+The first load of the whole 1 Oct 2026 release, into a local Postgres 16 and
+then staging, found three things the sections above got wrong, and the
+schema was changed to match (migration 0003):
+
+- **A policy's identity is fund, brand, government product group, and name.**
+  The name alone conflates 31 products (AHM's "elite gold copay" is J138 and
+  J139). Brand is a separate dimension: 1,251 named products by fund and name,
+  1,269 by fund, brand and name.
+- **Extras definitions vary by household as well as by state.** 24 product
+  families price single-person benefits and waiting periods apart from couple
+  and family ones, once the name, group and state are fixed. The extras side
+  tables carry `family_type` (`'ALL'` by default) and resolve with a fallback:
+  this state and household, this state for any household, any state for this
+  household, then ALL. Hospital definitions do not vary by household (0 cases).
+- **Limit groups vary by state.** 113 household-and-title groups carry a
+  different limit in some states. `extras_limit_groups` carries `state` and
+  collapses to ALL where every state agrees.
+
+Free text is not identity. Some rows of one product carry a typo the others do
+not ("in this product" against "in the product"), and one row sets a
+special-features flag another does not. Text is taken as the most common value
+among the rows it covers; the flag is set if any row sets it. Neither can
+split a policy.
+
+Verified in the loaded snapshot: 132,018 rate rows (31,864 open hospital,
+13,776 open extras, 33,964 open combined, matching the files' own Count
+attributes); 1,251 named open hospital products; zero rate-key collisions;
+the five household types; zero grants to the public API roles.
+
+The first load writes no change-log rows against a previous snapshot. The
+diff was checked with a second release that changes one premium: the log
+records exactly that change and nothing else.
