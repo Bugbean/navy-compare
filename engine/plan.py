@@ -1,10 +1,12 @@
-"""From a rep's request to the policies it could mean, offered back for the rep to confirm.
+"""From a rep's request in plain words to the policies and benefits it means, offered back to confirm.
 
-    request -> plan (a model reads the words)  ->  candidates (the database finds policies)  ->  the rep ticks
+    request  ->  plan (one model call reads the words)  ->  suggestions (the index finds policies)
 
-The model decides only what the rep is asking about: which terms name policies, which features matter,
-and whether all of a group is meant. Finding the policies, and every figure after that, is done by the
-database. A request the model cannot read gives an empty plan, and the page asks the rep to type a term.
+The model only decides what the rep is asking about: the words that name policies or companies, the
+benefits they care about, and the state and household if they said them. Finding the policies is the
+type-ahead index's job (engine/catalog.py), and the rep confirms every policy before anything is
+compared: a term that matches one policy exactly is ticked for them, anything else is offered as a
+choice. A request the model cannot read gives an empty plan, never a guess.
 """
 from __future__ import annotations
 
@@ -12,13 +14,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from config.reference import CLINICAL_CATEGORIES, EXTRAS_SERVICES, FAMILY_TYPES, STATES
-from engine import search
-from engine.db import Snapshot
+from config.features import FEATURES
+from config.reference import FAMILY_TYPES, STATES
+from engine.catalog import Catalog, words
 
-PLANNER_PROMPT = Path(__file__).resolve().parent.parent / "ai" / "prompts" / "planner_v1.md"
+PLANNER_PROMPT = Path(__file__).resolve().parent.parent / "ai" / "prompts" / "planner_v2.md"
 PRODUCT_TYPES = ("hospital", "extras", "combined")
 MAX_TERMS = 6
+MATCHES_PER_TERM = 6
 
 PLAN_TOOL = {
     "name": "plan_request",
@@ -26,12 +29,13 @@ PLAN_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "navy_terms": {"type": "array", "items": {"type": "string"}},
-            "navy_all": {"type": "boolean"},
-            "comp_terms": {"type": "array", "items": {"type": "string"}},
-            "comp_all": {"type": "boolean"},
-            "features": {"type": "array", "items": {"type": "string",
-                                                    "enum": list(CLINICAL_CATEGORIES) + list(EXTRAS_SERVICES)}},
+            "navy_terms": {"type": "array", "items": {"type": "string"},
+                           "description": "Words naming Navy Health policies, as the rep said them"},
+            "navy_all": {"type": "boolean", "description": "The rep means all of Navy Health's policies"},
+            "comp_terms": {"type": "array", "items": {"type": "string"},
+                           "description": "Words naming competitor policies or companies, as the rep said them"},
+            "features": {"type": "array", "items": {"type": "string", "enum": list(FEATURES)},
+                         "description": "The benefits the rep wants compared"},
             "product_type": {"type": "string", "enum": list(PRODUCT_TYPES) + [""]},
             "state": {"type": "string", "enum": [s for s in STATES if s != "ALL"] + [""]},
             "family_type": {"type": "string", "enum": list(FAMILY_TYPES) + [""]},
@@ -47,7 +51,6 @@ class Plan:
     navy_terms: list[str] = field(default_factory=list)
     navy_all: bool = False
     comp_terms: list[str] = field(default_factory=list)
-    comp_all: bool = False
     features: list[str] = field(default_factory=list)
     product_type: str = ""
     state: str = ""
@@ -56,87 +59,52 @@ class Plan:
     usage: Any = None
 
 
-@dataclass
-class Group:
-    label: str
-    policies: list[dict]
-    total: int
-    reason: str
-
-
-def _clean_terms(values: Any) -> list[str]:
-    out = []
-    for v in values or []:
-        if isinstance(v, str) and v.strip():
-            out.append(v.strip()[:80])
-    return out[:MAX_TERMS]
+def _terms(values: Any) -> list[str]:
+    return [v.strip()[:80] for v in (values or []) if isinstance(v, str) and v.strip()][:MAX_TERMS]
 
 
 def plan(request: str, *, client: Any, model: str) -> Plan:
-    """One tool-forced model call. A reply that is not a usable plan is an empty plan, never a guess."""
-    system = PLANNER_PROMPT.read_text(encoding="utf-8")
+    """One tool-forced model call. Anything the reply holds that is not an allowed value is dropped."""
     response = client.messages.create(
-        model=model, max_tokens=500, system=system,
+        model=model, max_tokens=600, system=PLANNER_PROMPT.read_text(encoding="utf-8"),
         tools=[PLAN_TOOL], tool_choice={"type": "tool", "name": "plan_request"},
         messages=[{"role": "user", "content": request}])
     usage = getattr(response, "usage", None)
     for block in response.content:
         if getattr(block, "type", None) == "tool_use" and block.name == "plan_request":
             d = dict(block.input)
-            features = [f for f in d.get("features") or [] if f in CLINICAL_CATEGORIES or f in EXTRAS_SERVICES]
             return Plan(
-                navy_terms=_clean_terms(d.get("navy_terms")), navy_all=bool(d.get("navy_all")),
-                comp_terms=_clean_terms(d.get("comp_terms")), comp_all=bool(d.get("comp_all")),
-                features=features,
+                navy_terms=_terms(d.get("navy_terms")), navy_all=bool(d.get("navy_all")),
+                comp_terms=_terms(d.get("comp_terms")),
+                features=[f for f in d.get("features") or [] if f in FEATURES],
                 product_type=d.get("product_type") if d.get("product_type") in PRODUCT_TYPES else "",
-                state=d.get("state") if d.get("state") in STATES else "",
+                state=d.get("state") if d.get("state") in STATES and d.get("state") != "ALL" else "",
                 family_type=d.get("family_type") if d.get("family_type") in FAMILY_TYPES else "",
                 confidence=float(d.get("confidence") or 0), usage=usage)
     return Plan(usage=usage)
 
 
-def candidates(db: Snapshot, p: Plan) -> list[Group]:
-    """The policies the plan could mean, as groups for the rep to tick. Each term contributes the policies
-    it matches; a feature narrows a group to the policies that cover it in the chosen state."""
-    groups: list[Group] = []
-    for navy in (True, False):
-        terms = p.navy_terms if navy else p.comp_terms
-        select_all = p.navy_all if navy else p.comp_all
-        label = "Navy Health" if navy else "Competitors"
-        seen: dict[int, dict] = {}
-        reasons: list[str] = []
-        if select_all:
-            found, total = search.find(db, navy=navy, product_type=p.product_type)
-            for r in found:
-                seen[r["id"]] = r
-            reasons.append("all of them")
-        else:
-            for term in terms:
-                found, total = search.find(db, text=term, navy=navy, product_type=p.product_type)
-                for r in found:
-                    seen.setdefault(r["id"], r)
-                reasons.append(f"matches '{term}'")
-        if p.features and seen:
-            if not p.state:
-                reasons.append("covering the features asked about (needs a state)")
-            else:
-                clinical = [f for f in p.features if f in CLINICAL_CATEGORIES]
-                extras = [f for f in p.features if f in EXTRAS_SERVICES]
-                keep = set(seen)
-                if clinical:
-                    keep &= {r["id"] for r in search.feature_match(db, categories=clinical, state=p.state, navy=navy)}
-                if extras:
-                    keep &= {r["id"] for r in search.extras_match(
-                        db, services=extras, state=p.state, family=p.family_type or "couple", navy=navy)}
-                if keep:
-                    seen = {k: v for k, v in seen.items() if k in keep}
-                    reasons.append(f"covering {', '.join(p.features)} in {p.state}")
-                else:
-                    # Nothing covers all of it. Say so, and still offer the matches, so the rep can
-                    # choose to compare them anyway rather than being shown nothing.
-                    reasons.append(f"none cover {', '.join(p.features)} in {p.state}; showing all matches")
-        if seen or terms or select_all:
-            ordered = sorted(seen.values(), key=lambda r: (not r["is_navy"], r["current_name"]))
-            groups.append(Group(label=label, policies=ordered, total=len(ordered),
-                                reason="; ".join(reasons)))
-    return groups
+def _exact(term: str, policies: list[dict]) -> list[dict]:
+    t = " ".join(words(term))
+    return [p for p in policies if " ".join(words(p["name"])) == t]
+
+
+def suggestions(cat: Catalog, p: Plan) -> dict:
+    """What to offer the rep: per term, the policies and companies it matches, and which (if any) can be
+    ticked for them because the term names exactly one policy."""
+    out: dict[str, list[dict]] = {"navy": [], "comp": []}
+    if p.navy_all:
+        found = cat.search("", side="navy", product_type=p.product_type, limit=60)
+        out["navy"].append({"term": "all Navy Health policies", "policies": found["policies"], "funds": [],
+                            "total": found["total"], "pick": []})
+    for side, terms in (("navy", p.navy_terms), ("comp", p.comp_terms)):
+        for term in terms:
+            found = cat.search(term, side=side, product_type=p.product_type, limit=MATCHES_PER_TERM)
+            if not found["policies"] and p.product_type:
+                found = cat.search(term, side=side, limit=MATCHES_PER_TERM)
+            exact = _exact(term, found["policies"])
+            pick = [exact[0]["id"]] if len(exact) == 1 else (
+                [found["policies"][0]["id"]] if found["total"] == 1 else [])
+            out[side].append({"term": term, "policies": found["policies"], "funds": found["funds"],
+                              "total": found["total"], "pick": pick})
+    return out

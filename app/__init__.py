@@ -77,12 +77,12 @@ def create_app() -> Flask:
     app.config.update(SESSION_COOKIE_SECURE=auth.COOKIE_SECURE, SESSION_COOKIE_SAMESITE="Lax")
 
     from app.admin.routes import bp as admin_bp
-    from app.ask import bp as ask_bp
     from app.auth.routes import bp as auth_bp
     from app.auth.routes import csrf_token, log_activity, set_session
+    from app.call import bp as call_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(ask_bp)
+    app.register_blueprint(call_bp)
 
     def _refuse(user, module: str | None, area: str | None = None):
         # Repeated denials for one person are a signal worth seeing: someone

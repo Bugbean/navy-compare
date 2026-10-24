@@ -3,6 +3,10 @@
 Off by default, and it refuses to switch on anywhere but a laptop: the app must be
 served from localhost, and it must not be running on Cloud Run (which sets K_SERVICE).
 Anywhere else the setting is an error at start-up, not a quiet way in.
+
+The stand-in account exists only in this process, so the database refuses its activity-log rows
+(they reference a user that is not there). The page works the same; only the local activity and AI
+usage records are missing.
 """
 from __future__ import annotations
 

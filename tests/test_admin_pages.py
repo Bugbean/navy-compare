@@ -86,8 +86,13 @@ def client(monkeypatch):
     "/admin/users?invite=exists",
     f"/admin/users/{PROFILE['id']}",
     f"/admin/users/{PROFILE['id']}?welcome=sent&acct=saved",
-    "/",
 ])
 def test_admin_page_renders(client, path):
     r = client.get(path)
     assert r.status_code == 200, r.data[:500]
+
+
+def test_home_lands_an_admin_on_the_call_screen(client):
+    """An admin holds every module, so the front door goes straight to the call screen."""
+    r = client.get("/")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/call")

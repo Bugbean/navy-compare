@@ -1,0 +1,102 @@
+# How much a difference between two policies matters on a retention call.
+#
+# The comparison card ranks differences by this score, then by the member's chips, then by the
+# type order at the bottom. Navy Health's sales lead reviews this file and may edit it; the app
+# reads it when it starts. Nothing here changes a figure: it only decides what is shown first.
+#
+# Scores: 0 is noise and is not shown as a difference, 1 minor, 2 notable, 3 decisive.
+# A band applies when the size of the difference is below its `below`; the last band has none.
+
+premium:            # dollars a month, before the government rebate
+  noise: 1.50
+  bands:
+    - {below: 10, score: 1}
+    - {below: 30, score: 2}
+    - {score: 3}
+
+cover_category:     # steps on: not covered < restricted < covered
+  one_step: 2
+  two_steps: 3
+
+tier:               # rank steps; a Plus tier is half a step above its base
+  bands:
+    - {below: 1, score: 1}
+    - {below: 2, score: 2}
+    - {score: 3}
+
+wait_months:        # months
+  noise: 0
+  bands:
+    - {below: 3, score: 1}
+    - {below: 9, score: 2}
+    - {score: 3}
+
+copayment: {score: 2}
+
+excess:             # always a trade-off, never a win: a lower excess comes with a higher premium
+  score: 1
+
+extras_service: {score: 2}     # covered on one side and not the other
+
+extras_item:        # dollars paid for one visit or item
+  noise: 5
+  bands:
+    - {below: 20, score: 1}
+    - {score: 2}
+
+extras_limit:       # dollars a year
+  noise: 20
+  bands:
+    - {below: 300, score: 1}
+    - {score: 2}
+
+ambulance: {score: 2}
+accommodation: {score: 1}
+known_gap: {score: 1}
+
+# When two differences score the same, this order decides.
+type_priority:
+  - cover_category
+  - premium
+  - wait_months
+  - tier
+  - extras_service
+  - extras_limit
+  - extras_item
+  - ambulance
+  - copayment
+  - excess
+  - accommodation
+  - known_gap
+
+# The member-need chips a rep can turn on. A difference tagged with an active chip moves up.
+chips:
+  - {key: joints, label: Joints or back}
+  - {key: pregnancy, label: Pregnancy planned}
+  - {key: young_family, label: Young family}
+  - {key: dental, label: Dental}
+  - {key: mental_health, label: Mental health}
+  - {key: eyes, label: Eyes}
+  - {key: heart, label: Heart}
+  - {key: cancer, label: Cancer care}
+  - {key: older, label: 60 plus}
+  - {key: physio, label: Physio and chiro}
+
+# Which benefits each chip is about. An extras item belongs to the tags of its service.
+tags:
+  joints: [cover:JointReplacements, cover:JointReconstructions, cover:BackNeckSpine, cover:BoneJointMuscle,
+           extras:Physiotherapy, extras:Chiropractic, limit:Physiotherapy]
+  pregnancy: [cover:PregnancyBirth, cover:AssistedReproductive, cover:MiscarriageTerminationOfPregnancy,
+              wait:PregnancyBirth, extras:AntenatalPostnatal]
+  young_family: [cover:TonsilsAdenoidsGrommets, cover:PregnancyBirth, extras:Orthodontic, extras:DentalGeneral,
+                 extras:SpeechTherapy, limit:Orthodontic]
+  dental: [extras:DentalGeneral, extras:DentalMajor, extras:Endodontic, extras:Orthodontic, cover:DentalSurgery,
+           limit:DentalGeneral, limit:DentalMajor, limit:Orthodontic]
+  mental_health: [cover:HospitalPsychiatric, extras:Psychology, wait:SubAcute, limit:Psychology]
+  eyes: [cover:Cataracts, cover:Eye, extras:Optical, limit:Optical]
+  heart: [cover:HeartVascular]
+  cancer: [cover:ChemotherapyRadiotherapyImmunotherapy, cover:PalliativeCare]
+  older: [cover:Cataracts, cover:JointReplacements, cover:HeartVascular, cover:Dialysis, extras:HearingAids,
+          extras:Optical, limit:HearingAids]
+  physio: [extras:Physiotherapy, extras:Chiropractic, extras:Osteopathy, extras:RemedialMassage,
+           limit:Physiotherapy, limit:Chiropractic]

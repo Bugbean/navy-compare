@@ -1,0 +1,136 @@
+{# The comparison for the chosen policies: a card per Navy Health and competitor pair, then the matrix. #}
+{% macro diff_line(d) -%}
+  <li class="diff{% if d.chip_match %} need{% endif %}">
+    <span class="diff-label">{{ d.label }}{% if d.chip_match %} <span class="need-mark" title="Matches a member need you selected">need</span>{% endif %}</span>
+    <span class="diff-vals">
+      <span class="v-navy">{{ d.navy.display }}{% if d.navy.note %} <span class="muted">{{ d.navy.note }}</span>{% endif %}</span>
+      <span class="vs">vs</span>
+      <span class="v-comp">{{ d.comp.display }}{% if d.comp.note %} <span class="muted">{{ d.comp.note }}</span>{% endif %}</span>
+    </span>
+    <span class="mat mat-{{ d.materiality }}" title="How much this matters: {{ d.materiality }} of 3"></span>
+  </li>
+{%- endmacro %}
+
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% else %}
+  <p class="muted small context-line">
+    {{ family | replace('_', ' ') | capitalize }} in {{ state }}{% if scope %}, dependants: {{ scope | replace('+', ', ') }}{% endif %}.
+    Premiums are before the government rebate{% if anchor is not none %}, each at the excess closest to ${{ '%g' | format(anchor) }}{% endif %}.
+    Data as of {{ release_date }}.
+  </p>
+  {% if excess_options | length > 1 %}
+    <p class="excess-pick small">Match premiums at:
+      {% for ex in excess_options %}
+        <button type="button" class="pill excess-choice{{ ' on' if anchor is not none and ex == anchor else '' }}" data-excess="{{ '%g' | format(ex) }}">{{ 'no excess' if ex == 0 else '$' ~ ('%g' | format(ex)) ~ ' excess' }}</button>
+      {% endfor %}
+    </p>
+  {% endif %}
+  {% if missing_rates %}
+    <p class="warn">No rate for this household in {{ state }}: {{ missing_rates | join('; ') }}. Try another household or state.</p>
+  {% endif %}
+
+  {% if closest %}
+    <div class="closest">
+      {% for comp_id, matches in closest.items() %}
+        <p><strong>Closest Navy Health policies to {{ by_id[comp_id].name }}:</strong>
+          {% for m in matches %}
+            <button type="button" class="pill add-policy" data-id="{{ m.navy_id }}" data-name="{{ m.navy_name }}" data-navy="1">
+              + {{ m.navy_name }} <span class="muted">{{ (m.score * 100) | round | int }}% cover match</span>
+            </button>
+          {% endfor %}
+        </p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% for c in cards %}
+    <section class="pair-card">
+      <h3>{{ by_id[c.navy_id].name }} <span class="muted">against</span> {{ by_id[c.comp_id].name }}
+        <span class="muted small">{{ by_id[c.comp_id].fund_name }}</span></h3>
+      {% if c.price and c.price.navy and c.price.comp %}
+        <p class="price-line">
+          Navy Health <strong>{{ c.price.navy.display }}</strong> <span class="muted">{{ c.price.navy.note }}</span>
+          &nbsp;·&nbsp; {{ by_id[c.comp_id].fund_name }} <strong>{{ c.price.comp.display }}</strong> <span class="muted">{{ c.price.comp.note }}</span>
+        </p>
+      {% endif %}
+      <div class="two-col">
+        <div class="col-better">
+          <h4>Where Navy Health is better <span class="count">{{ c.stronger | length }}</span></h4>
+          {% if c.stronger %}
+            <ul>{% for d in c.stronger[:5] %}{{ diff_line(d) }}{% endfor %}</ul>
+            {% if c.stronger | length > 5 %}
+              <details><summary>{{ c.stronger | length - 5 }} more</summary><ul>{% for d in c.stronger[5:] %}{{ diff_line(d) }}{% endfor %}</ul></details>
+            {% endif %}
+          {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
+        </div>
+        <div class="col-watch">
+          <h4>Where theirs is better <span class="count">{{ c.watch | length }}</span></h4>
+          {% if c.watch %}
+            <ul>{% for d in c.watch[:3] %}{{ diff_line(d) }}{% endfor %}</ul>
+            {% if c.watch | length > 3 %}
+              <details><summary>{{ c.watch | length - 3 }} more</summary><ul>{% for d in c.watch[3:] %}{{ diff_line(d) }}{% endfor %}</ul></details>
+            {% endif %}
+          {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
+        </div>
+      </div>
+      {% if c.trade_offs %}
+        <details class="tradeoffs"><summary>Different, not better or worse ({{ c.trade_offs | length }})</summary>
+          <ul>{% for d in c.trade_offs %}{{ diff_line(d) }}{% endfor %}</ul>
+        </details>
+      {% endif %}
+      <p class="muted small">{{ c.same | length }} benefit{{ '' if c.same | length == 1 else 's' }} the same{% if c.missing %}; {{ c.missing | length }} only apply to one of the two{% endif %}.</p>
+      <div class="talk">
+        <button type="button" class="pill talk-go" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">Write a talking point</button>
+        <div class="talk-text" hidden></div>
+      </div>
+    </section>
+  {% endfor %}
+
+  {% if rows %}
+    <section class="matrix-wrap">
+      <div class="matrix-head">
+        <h3>Side by side</h3>
+        {% if not wanted %}
+          <button type="button" class="link-btn" id="toggle-all" data-all="{{ '0' if show_all else '1' }}">
+            {{ 'Show only the main rows and the differences' if show_all else 'Show every benefit' }}</button>
+        {% endif %}
+      </div>
+      <div class="table-wrap">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th class="benefit-col">Benefit</th>
+              {% for h in heads %}
+                <th class="{{ 'navy-col' if h.is_navy else '' }}">
+                  {% if h.is_navy %}<span class="tag-navy">Navy Health</span>{% endif %}
+                  <div class="col-name">{{ h.name }}</div>
+                  <div class="muted small">{{ h.fund }}{% if h.brand %} · {{ h.brand }}{% endif %}{% if h.tier %} · {{ h.tier }}{% endif %} · {{ h.type }}</div>
+                  <button type="button" class="link-btn remove-policy" data-id="{{ h.id }}">remove</button>
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% set ns = namespace(group='') %}
+            {% for r in rows %}
+              {% if r.group != ns.group %}
+                <tr class="group-row"><td colspan="{{ heads | length + 1 }}">{{ r.group }}</td></tr>
+                {% set ns.group = r.group %}
+              {% endif %}
+              <tr class="{{ 'same' if r.same else '' }}{{ ' need' if r.key in chip_rows else '' }}">
+                <td class="benefit-col">{{ r.label }}</td>
+                {% for v in r.cells %}
+                  <td class="{{ 'best' if loop.index0 in r.best else '' }}">
+                    {% if v %}{{ v.display }}{% if v.note %}<div class="muted small">{{ v.note }}</div>{% endif %}{% else %}<span class="muted">not part of this policy</span>{% endif %}
+                    {% if loop.index0 in r.best %}<span class="badge-better">better</span>{% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endif %}
