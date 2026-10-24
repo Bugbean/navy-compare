@@ -117,9 +117,14 @@ def test_the_card_for_a_real_pair_puts_decisive_cover_first(client):
 
 
 @needs_db
-def test_a_competitor_alone_offers_the_closest_navy_policies(client):
+def test_a_competitor_alone_is_compared_with_its_closest_navy_policy(client):
+    import json
+    import re
     html = client.get("/card?ids=115&state=NSW&family=couple").data.decode()
-    assert "Closest Navy Health policies" in html
+    meta = json.loads(re.search(r'<script type="application/json" id="card-meta">(.*?)</script>', html, re.S).group(1))
+    assert meta["auto_navy"] and meta["auto_navy"]["id"] in meta["columns"]
+    assert "best match" in html and 'class="verdict"' in html
+    assert all(a["id"] != meta["auto_navy"]["id"] for a in meta["alternatives"])
 
 
 @needs_db
@@ -161,3 +166,76 @@ def test_the_talking_point_facts_keep_each_side_in_its_own_field():
 
 def test_the_talking_point_needs_the_form_token(client):
     assert client.post("/script", data={"navy": "1", "comp": "2"}).status_code == 400
+    assert client.post("/script/stream", data={"navy": "1", "comp": "2"}).status_code == 400
+
+
+@pytest.fixture
+def offline(monkeypatch, client):
+    """The call routes with the index built from test rows and no database or model behind them."""
+    import app.call as call
+    cat = Catalog.from_rows(_rows(), 1, aliases={"NHB": ["navy", "our"], "NTF": ["teachers"]})
+    monkeypatch.setattr(call.cat, "catalog", lambda db: cat)
+    monkeypatch.setattr(call, "Snapshot", lambda: None)
+    monkeypatch.setattr(call, "get_client", lambda: None)
+    monkeypatch.setattr(call.calls, "begin", lambda kind, detail: ({"id": None, "detail": detail, "t0": 0}, None))
+    monkeypatch.setattr(call.calls, "end", lambda *a, **kw: None)
+    with client.session_transaction() as sess:
+        sess["csrf"] = "token"
+    return client
+
+
+def test_the_index_is_compressed_and_revalidated_with_an_etag(offline):
+    import gzip
+    import json
+    r = offline.get("/call/index.json", headers={"Accept-Encoding": "gzip"})
+    assert r.status_code == 200 and r.headers["Content-Encoding"] == "gzip"
+    data = json.loads(gzip.decompress(r.data))
+    row = next(p for p in data["policies"] if p[0] == 4)
+    assert row[1].startswith("HCF CORPORATE") and row[2] == "HCF" and row[3] == "h" and row[4] == "Bronze Plus"
+    assert data["funds"]["NHB"]["aliases"] == ["navy", "our"] and data["funds"]["NHB"]["navy"]
+    assert data["states"]["melbourne"] == "VIC" and data["needs"]["knees"]["chip"] == "joints"
+    again = offline.get("/call/index.json", headers={"If-None-Match": r.headers["ETag"]})
+    assert again.status_code == 304
+
+
+def test_a_follow_up_is_read_against_the_comparison_on_screen(offline, monkeypatch):
+    import json
+
+    import app.call as call
+    seen = {}
+
+    def fake_plan(text, *, client, model, context=None):
+        seen["text"], seen["context"] = text, context
+        return planning.Plan(comp_terms=["teachers"], features=["price"], intent="add", confidence=0.9)
+    monkeypatch.setattr(call.planning, "plan", fake_plan)
+    ctx = {"navy": ["Core Silver+ Hospital"], "competitors": ["Frank Bronze Hospital"], "state": "NSW",
+           "household": "couple", "secret": "dropped"}
+    r = offline.post("/call/plan", data={"csrf": "token", "request": "add teachers", "context": json.dumps(ctx)})
+    d = r.get_json()
+    assert r.status_code == 200 and d["understood"] and d["intent"] == "add"
+    assert seen["context"] == {k: v for k, v in ctx.items() if k != "secret"}
+    assert {p["id"] for p in d["comp"][0]["policies"]} == {6, 7}
+    assert d["features"] == [{"key": "price", "label": d["features"][0]["label"]}]
+
+
+def test_a_broken_context_is_ignored_rather_than_refused(offline, monkeypatch):
+    import app.call as call
+    seen = {}
+    monkeypatch.setattr(call.planning, "plan",
+                        lambda text, **kw: seen.update(kw) or planning.Plan(intent="new", confidence=0.9))
+    r = offline.post("/call/plan", data={"csrf": "token", "request": "start again", "context": "{not json"})
+    assert r.status_code == 200 and seen["context"] is None and r.get_json()["intent"] == "new"
+
+
+def test_the_planner_sends_the_screen_and_caches_its_instructions():
+    sent = {}
+    reply = NS(usage=None, content=[NS(type="tool_use", name="plan_request",
+                                       input={"intent": "cheaper", "confidence": 0.8})])
+    client = NS(messages=NS(create=lambda **kw: sent.update(kw) or reply))
+    p = planning.plan("cheaper?", client=client, model="m", context={"navy": ["Core"]})
+    assert p.intent == "cheaper"
+    assert sent["messages"][0]["content"].startswith('The comparison on screen: {"navy": ["Core"]}')
+    assert sent["system"][0]["cache_control"] == {"type": "ephemeral"}
+    odd = NS(messages=NS(create=lambda **kw: NS(usage=None, content=[
+        NS(type="tool_use", name="plan_request", input={"intent": "dance", "confidence": 0.8})])))
+    assert planning.plan("x", client=odd, model="m").intent == "compare"

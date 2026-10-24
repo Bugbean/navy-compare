@@ -2,76 +2,31 @@
 {% block title %}Compare — Navy Health Policy Compare{% endblock %}
 {% block content %}
 <div class="call-screen" data-csrf="{{ csrf }}">
-
-  <section class="household">
-    <div class="filter-group">
-      <label for="state">State</label>
-      <select id="state">{% for s in states %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+  <div class="bar-wrap">
+    <div class="bar">
+      <span class="bar-icon" aria-hidden="true">⌕</span>
+      <input type="text" id="bar" autocomplete="off" spellcheck="false" maxlength="500"
+             role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list"
+             placeholder="Type what the member says: “HCF bronze plus 750, couple in NSW, worried about her knees”">
+      <span class="thinking" id="thinking" hidden title="Reading the rest of what you typed"><i></i><i></i><i></i></span>
+      <button type="button" class="link-btn" id="new-call" title="Esc on an empty bar">New call</button>
     </div>
-    <div class="filter-group">
-      <label for="family">Household</label>
-      <select id="family">{% for f in families %}<option value="{{ f }}" {% if f == 'couple' %}selected{% endif %}>{{ f | replace('_', ' ') | capitalize }}</option>{% endfor %}</select>
-    </div>
-    <div class="filter-group dependants" id="dependants" hidden>
-      <label>Dependants on the policy</label>
-      <div>{% for t in titles %}<label class="tick"><input type="checkbox" value="{{ t }}" {% if t in ('Child', 'NonClassified', 'Student') %}checked{% endif %}> {{ t }}</label>{% endfor %}</div>
-    </div>
-  </section>
-
-  <section class="ask">
-    <label for="ask-text"><strong>What do you want to compare?</strong> <span class="muted">Say it your way; I'll find the policies and you confirm them.</span></label>
-    <div class="ask-row">
-      <input type="text" id="ask-text" maxlength="500" autocomplete="off"
-             placeholder="e.g. our Premium Gold 350 against HCF bronze and Bupa silver for dental and joint replacements">
-      <button type="button" class="btn" id="ask-go">Find</button>
-    </div>
-    <div id="ask-result" class="ask-result" hidden></div>
-  </section>
-
-  <section class="pickers">
-    <div class="picker" data-side="navy">
-      <h2>Navy Health policies</h2>
-      <div class="picker-input">
-        <input type="text" placeholder="Type a Navy Health policy: gold, silver+, extras…" autocomplete="off" aria-autocomplete="list">
-        <div class="dropdown" hidden></div>
-      </div>
-      <div class="chosen"></div>
-    </div>
-    <div class="picker" data-side="comp">
-      <h2>Competitor policies</h2>
-      <div class="picker-input">
-        <div class="fund-filter" hidden><span></span> <button type="button" class="link-btn clear-fund">× any company</button></div>
-        <input type="text" placeholder="Type a company or policy: HCF, Bupa bronze, Frank…" autocomplete="off" aria-autocomplete="list">
-        <div class="dropdown" hidden></div>
-      </div>
-      <div class="chosen"></div>
-    </div>
-  </section>
-
-  <section class="benefits">
-    <h2>Benefits to compare <span class="muted small">(leave empty to compare everything)</span></h2>
-    <div class="quick">
-      {% for name, keys in quick %}<button type="button" class="pill quick-add" data-keys="{{ keys | join(',') }}">+ {{ name }}</button>{% endfor %}
-    </div>
-    <div class="picker-input benefit-input">
-      <input type="text" id="benefit-text" placeholder="Or type a benefit: crown, physio, hips, glasses…" autocomplete="off">
-      <div class="dropdown" hidden></div>
-    </div>
-    <div class="chosen" id="benefit-chosen"></div>
-  </section>
-
-  <section class="chips">
-    <h2>Member needs <span class="muted small">(moves matching benefits to the top)</span></h2>
-    {% for c in chips %}<button type="button" class="chip" data-chip="{{ c.key }}">{{ c.label }}</button>{% endfor %}
-  </section>
-
-  <div class="compare-bar">
-    <button type="button" class="btn" id="compare-go" disabled>Compare</button>
-    <span class="muted small" id="compare-hint">Pick a Navy Health policy and at least one competitor, or two Navy Health policies.</span>
+    <div class="suggest" id="suggest" role="listbox" hidden></div>
   </div>
 
-  <section id="result" class="result" aria-live="polite"></section>
+  <div class="sentence" id="sentence" aria-live="polite"></div>
+  <div class="question" id="question" hidden></div>
+  <div class="notice" id="notice" hidden></div>
+
+  <section id="result" class="result" aria-live="polite">
+    <div class="empty-state">
+      <p><strong>Type the competitor's policy the way the member says it.</strong> The company is enough to start.</p>
+      <p class="muted small">Try “bupa silver plus”, “defence gold”, “frank” or “our premium gold 750 vs hcf”. Then ask follow-ups in the same bar: “what about dental?”, “add medibank”, “cheaper option?”.</p>
+    </div>
+  </section>
+  <p class="keys muted small">
+    <kbd>/</kbd> type · <kbd>↑</kbd><kbd>↓</kbd> <kbd>Enter</kbd> pick · <kbd>1</kbd>–<kbd>6</kbd> answer a question · <kbd>Esc</kbd> clear, twice for a new call
+  </p>
 </div>
-<script>window.FEATURE_LABELS = {{ feature_labels | tojson }};</script>
 <script src="{{ url_for('static', filename='call.js') }}" defer></script>
 {% endblock %}

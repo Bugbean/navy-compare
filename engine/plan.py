@@ -10,16 +10,18 @@ choice. A request the model cannot read gives an empty plan, never a guess.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from config.features import FEATURES
 from config.reference import FAMILY_TYPES, STATES
 from engine.catalog import Catalog, words
 
-PLANNER_PROMPT = Path(__file__).resolve().parent.parent / "ai" / "prompts" / "planner_v2.md"
+PLANNER_PROMPT = Path(__file__).resolve().parent.parent / "ai" / "prompts" / "planner_v3.md"
 PRODUCT_TYPES = ("hospital", "extras", "combined")
+INTENTS = ("compare", "add", "question", "cheaper", "new", "other")
 MAX_TERMS = 6
 MATCHES_PER_TERM = 6
 
@@ -39,9 +41,13 @@ PLAN_TOOL = {
             "product_type": {"type": "string", "enum": list(PRODUCT_TYPES) + [""]},
             "state": {"type": "string", "enum": [s for s in STATES if s != "ALL"] + [""]},
             "family_type": {"type": "string", "enum": list(FAMILY_TYPES) + [""]},
+            "intent": {"type": "string", "enum": list(INTENTS),
+                       "description": "compare: start or refine a comparison; add: add policies to the one on "
+                                      "screen; question: ask about a benefit of the policies on screen; cheaper: "
+                                      "wants a cheaper Navy Health option; new: start a new comparison"},
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
-        "required": ["confidence"],
+        "required": ["confidence", "intent"],
     },
 }
 
@@ -55,6 +61,7 @@ class Plan:
     product_type: str = ""
     state: str = ""
     family_type: str = ""
+    intent: str = "compare"
     confidence: float = 0.0
     usage: Any = None
 
@@ -63,12 +70,17 @@ def _terms(values: Any) -> list[str]:
     return [v.strip()[:80] for v in (values or []) if isinstance(v, str) and v.strip()][:MAX_TERMS]
 
 
-def plan(request: str, *, client: Any, model: str) -> Plan:
-    """One tool-forced model call. Anything the reply holds that is not an allowed value is dropped."""
+def plan(request: str, *, client: Any, model: str, context: Optional[dict] = None) -> Plan:
+    """One tool-forced model call. Anything the reply holds that is not an allowed value is dropped.
+    `context` is the comparison on screen, so a follow-up ("what about dental?") is read against it."""
+    content = request if not context else (
+        "The comparison on screen: " + json.dumps(context, ensure_ascii=False) + "\n\nThe rep now says: " + request)
     response = client.messages.create(
-        model=model, max_tokens=600, system=PLANNER_PROMPT.read_text(encoding="utf-8"),
+        model=model, max_tokens=600,
+        system=[{"type": "text", "text": PLANNER_PROMPT.read_text(encoding="utf-8"),
+                 "cache_control": {"type": "ephemeral"}}],
         tools=[PLAN_TOOL], tool_choice={"type": "tool", "name": "plan_request"},
-        messages=[{"role": "user", "content": request}])
+        messages=[{"role": "user", "content": content}])
     usage = getattr(response, "usage", None)
     for block in response.content:
         if getattr(block, "type", None) == "tool_use" and block.name == "plan_request":
@@ -80,6 +92,7 @@ def plan(request: str, *, client: Any, model: str) -> Plan:
                 product_type=d.get("product_type") if d.get("product_type") in PRODUCT_TYPES else "",
                 state=d.get("state") if d.get("state") in STATES and d.get("state") != "ALL" else "",
                 family_type=d.get("family_type") if d.get("family_type") in FAMILY_TYPES else "",
+                intent=d.get("intent") if d.get("intent") in INTENTS else "compare",
                 confidence=float(d.get("confidence") or 0), usage=usage)
     return Plan(usage=usage)
 

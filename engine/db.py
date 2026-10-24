@@ -16,9 +16,12 @@ import json
 import os
 import re
 import subprocess
+import time
 from typing import Any, Mapping, Optional
 
 _PARAM = re.compile(r"(?<![:\w]):([a-z_][a-z0-9_]*)\b")
+SNAPSHOT_CACHE_SECONDS = 60
+_SNAPSHOT_CACHE: dict[str, tuple[float, int]] = {}
 
 
 class EngineError(RuntimeError):
@@ -86,7 +89,14 @@ class Snapshot:
         return json.loads(proc.stdout.strip() or "[]")
 
     def live_snapshot_id(self) -> int:
+        """The live snapshot. Cached for a minute per database: it changes once a month, and every
+        request needs it, so asking each time would add a round trip to every comparison."""
+        now = time.monotonic()
+        hit = _SNAPSHOT_CACHE.get(self.url)
+        if hit and now - hit[0] < SNAPSHOT_CACHE_SECONDS:
+            return hit[1]
         found = self.rows("SELECT id FROM snapshots WHERE status = 'live'")
         if len(found) != 1:
             raise EngineError(f"expected one live snapshot, found {len(found)}")
+        _SNAPSHOT_CACHE[self.url] = (now, int(found[0]["id"]))
         return int(found[0]["id"])

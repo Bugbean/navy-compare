@@ -35,7 +35,9 @@ def test_plus_and_ampersand_read_the_same_however_they_are_written():
 def test_every_word_must_start_a_word_of_the_policy_or_its_company():
     found = cat().search("hcf bro", side="comp")
     assert [p["id"] for p in found["policies"]] == [4]
-    assert cat().search("hcf zzz", side="comp")["policies"] == []
+    # A word no policy has is set aside and reported, rather than hiding everything.
+    found = cat().search("hcf zzz", side="comp")
+    assert [p["id"] for p in found["policies"]] == [4] and found["dropped"] == ["zzz"]
 
 
 def test_a_navy_search_only_finds_navy_policies():
@@ -91,3 +93,13 @@ def test_every_clinical_category_extras_service_and_item_has_a_feature():
 
 def test_every_synonym_points_at_a_real_feature():
     assert all(k in feats.FEATURES for keys in feats.SYNONYMS.values() for k in keys)
+
+
+def test_filler_and_unknown_words_are_dropped_only_when_nothing_matches_them_all():
+    c = Catalog.from_rows(_rows(), snapshot_id=1, aliases={"NTF": ["teachers"]})
+    found = c.search("teachers top cover", side="comp")
+    assert {p["id"] for p in found["policies"]} == {6, 7} and found["dropped"] == ["cover"]
+    found = c.search("hcf bronze worried", side="comp")
+    assert [p["id"] for p in found["policies"]] == [4] and found["dropped"] == ["worried"]
+    assert c.search("premium gold", side="navy")["dropped"] == []
+    assert c.search("zzz qqq", side="comp")["policies"] == []

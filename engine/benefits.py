@@ -11,7 +11,9 @@ rank is None the two can only be shown, not ranked, and the comparison says "dif
 """
 from __future__ import annotations
 
+import copy
 import math
+import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -101,13 +103,30 @@ SELECT json_build_object(
 """
 
 
+FETCH_CACHE_SECONDS = 300
+_FETCH_CACHE: dict[tuple, tuple[float, dict]] = {}
+
+
 def fetch(db: Snapshot, *, ids: list[int], state: str, family: str, scope: str) -> dict:
-    """Everything the comparison needs for these policies, in one query."""
+    """Everything the comparison needs for these policies, in one query. Kept for five minutes per
+    snapshot, so a rep turning on a chip or changing the excess sees the card redrawn at once."""
     if not ids:
         raise EngineError("choose at least one policy")
     state, family, scope = q._state(state), q._family(family), q._scope(scope)
     clean = sorted({int(i) for i in ids})
     snap = db.live_snapshot_id()
+    key = (db.url, snap, tuple(clean), state, family, scope)
+    hit = _FETCH_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < FETCH_CACHE_SECONDS:
+        return copy.deepcopy(hit[1])
+    data = _fetch(db, clean, snap, state, family, scope)
+    if len(_FETCH_CACHE) > 500:
+        _FETCH_CACHE.clear()
+    _FETCH_CACHE[key] = (time.monotonic(), data)
+    return copy.deepcopy(data)
+
+
+def _fetch(db: Snapshot, clean: list[int], snap: int, state: str, family: str, scope: str) -> dict:
     sql = _FETCH.replace("{ids}", "ARRAY[" + ",".join(lit(i) for i in clean) + "]")
     rows = db.rows(sql, {"snap": snap, "state": state, "family": family, "scope": scope})
     data = rows[0]["data"]

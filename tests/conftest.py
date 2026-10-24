@@ -31,6 +31,9 @@ if os.environ.get("TEST_USE_REAL_DB") != "1":
     os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "tests-do-not-reach-a-database"
     # Anything that sends or spends, held shut for the same reason. A test
     # that emails somebody is a test that emailed somebody.
+    # Set to empty rather than removed: app/__init__.py loads .env when it is imported, and that only
+    # fills keys that are absent, so an empty value keeps the real one out.
     for key in ("RESEND_API_KEY", "ANTHROPIC_API_KEY"):
-        os.environ.pop(key, None)
+        os.environ[key] = ""
+    os.environ.setdefault("DATABASE_URL", "")
     os.environ.setdefault("FLASK_SECRET_KEY", "tests-only")
