@@ -74,15 +74,39 @@ def call_screen():
                            chips=mat.chips())
 
 
+_CATEGORY_GROUPS = {"Clinical categories", "Extras services", "Extras limits"}
+# "annual limit" is in every one of the 27 "Extras limits" labels, so on their own these two words
+# would set the focus to all 27 services at once rather than naming any benefit.
+_TOO_GENERIC = {"annual", "limit"}
+
+
 def _benefit_words() -> dict[str, list[str]]:
-    """The single words a rep might use for a benefit ("crown", "physio"), from config/features.SYNONYMS,
-    so the browser can recognise them without a model."""
+    """The single words a rep might use for a benefit, so the browser can recognise them without a
+    model: every clinical category and extras service's own plain name ("bone", "joint", "muscle" for
+    Bone, joint and muscle), not only the ones someone thought to add an everyday synonym for
+    ("crown", "physio", config/features.SYNONYMS — merged into FEATURES[key].words already).
+
+    Individual billed items (item: keys, "physiotherapy, first visit") are deliberately left out here:
+    their labels share generic words ("first", "visit", "follow-up") across dozens of unrelated
+    services, which would make a single word like "first" set the focus to all of them at once. An
+    item is only reached through its own deliberate synonym ("crown", "root canal")."""
     out: dict[str, list[str]] = {}
+    for key, feature in feats.FEATURES.items():
+        if feature.group not in _CATEGORY_GROUPS:
+            continue
+        for word in feature.words:
+            if len(word) >= 3 and word not in lang.STOP_WORDS and word not in _TOO_GENERIC:
+                out.setdefault(word, [])
+                if key not in out[word]:
+                    out[word].append(key)
     for phrase, keys in feats.SYNONYMS.items():
+        item_keys = [k for k in keys if k.startswith("item:")]
+        if not item_keys:
+            continue
         for word in phrase.lower().split():
             if len(word) >= 3 and word not in lang.STOP_WORDS:
                 out.setdefault(word, [])
-                out[word] += [k for k in keys if k not in out[word]]
+                out[word] += [k for k in item_keys if k not in out[word]]
     return out
 
 
@@ -288,6 +312,7 @@ def card():
     # covered, what each item pays back, what the year caps it at — everything else stays the plain
     # one-line direct answer.
     focus_services = cl.services_in(sel.focus)
+    focus_categories = cl.categories_in(sel.focus)
     focus_other = [k for k in sel.focus if not feats.item_service(k)]
     shown = []
     for c in cards:
@@ -295,8 +320,12 @@ def card():
         answers = [df.compare_pair(k, vals.get(c.navy_id, {}).get(k), vals.get(c.comp_id, {}).get(k))
                    for k in focus_other if vals.get(c.navy_id, {}).get(k) or vals.get(c.comp_id, {}).get(k)]
         claim_blocks = cl.claim_groups(c.navy_id, c.comp_id, vals, services=focus_services) if focus_services else []
+        # A hospital clinical category has no dollar benefit or wait of its own (the government data
+        # has none to give — docs/DATA_MODEL.md); what actually applies if she needs treatment is the
+        # excess, co-payment, known gap cover and the fund-wide waits, shown once alongside it.
+        hospital = cl.hospital_context(c.navy_id, c.comp_id, vals) if focus_categories else []
         shown.append({"card": c, "verdict": suggest.verdict(c, nname, by_id[c.comp_id]["fund_name"]),
-                      "answers": answers, "claims": claim_blocks})
+                      "answers": answers, "claims": claim_blocks, "hospital": hospital})
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
     heads = []

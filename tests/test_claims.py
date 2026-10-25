@@ -74,3 +74,50 @@ def test_coverage_on_one_side_only_is_a_real_win_not_hidden_as_a_tie():
     vals[1]["extras:DentalGeneral"] = Value("extras:DentalGeneral", "extras_service", "Covered", 1.0, None)
     blocks = cl.claim_groups(1, 2, vals, services=["DentalGeneral"])
     assert blocks[0].coverage.direction == "missing"
+
+
+def test_categories_in_finds_cover_keys_and_ignores_everything_else():
+    assert cl.categories_in(["cover:BoneJointMuscle", "price", "extras:Physiotherapy", "cover:HeartVascular"]) \
+        == ["cover:BoneJointMuscle", "cover:HeartVascular"]
+    assert cl.categories_in(["price", "wait:Other"]) == []
+
+
+def _hospital_vals():
+    navy = {
+        "cover:BoneJointMuscle": Value("cover:BoneJointMuscle", "cover_category", "Covered", 2.0, 2.0),
+        "excess": Value("excess", "excess", "$500", 500.0, 500.0),
+        "copayment": Value("copayment", "copayment", "None", 0.0, 0.0),
+        "known_gap": Value("known_gap", "known_gap", "Yes", 1.0, None),
+        "wait:PreExisting": Value("wait:PreExisting", "wait_months", "12 months", -12.0, 12.0, "months"),
+        "wait:Other": Value("wait:Other", "wait_months", "2 months", -2.0, 2.0, "months"),
+    }
+    comp = {
+        "cover:BoneJointMuscle": Value("cover:BoneJointMuscle", "cover_category", "Not covered", 0.0, 0.0),
+        "excess": Value("excess", "excess", "$750", 750.0, 750.0),
+        "copayment": Value("copayment", "copayment", "None", 0.0, 0.0),
+        "known_gap": Value("known_gap", "known_gap", "No", 0.0, None),
+        "wait:PreExisting": Value("wait:PreExisting", "wait_months", "12 months", -12.0, 12.0, "months"),
+        "wait:Other": Value("wait:Other", "wait_months", "2 months", -2.0, 2.0, "months"),
+    }
+    return {1: navy, 2: comp}
+
+
+def test_hospital_context_covers_what_applies_on_admission_not_a_claim_amount():
+    out = cl.hospital_context(1, 2, _hospital_vals())
+    assert {d.key for d in out} == {"excess", "copayment", "known_gap", "wait:PreExisting", "wait:Other"}
+    excess = next(d for d in out if d.key == "excess")
+    assert excess.direction == "trade_off"   # excess is never scored as a plain win
+    gap = next(d for d in out if d.key == "known_gap")
+    assert gap.direction == "navy_better"
+
+
+def test_hospital_context_is_empty_when_neither_side_has_any_of_it():
+    assert cl.hospital_context(1, 2, {1: {}, 2: {}}) == []
+
+
+def test_hospital_context_skips_a_key_only_if_both_sides_lack_it():
+    vals = _hospital_vals()
+    del vals[2]["known_gap"]
+    out = cl.hospital_context(1, 2, vals)
+    gap = next(d for d in out if d.key == "known_gap")
+    assert gap.direction == "missing"

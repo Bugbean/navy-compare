@@ -50,6 +50,32 @@ def services_in(keys: list[str]) -> list[str]:
     return out
 
 
+def categories_in(keys: list[str]) -> list[str]:
+    """The clinical categories (cover: keys) these feature keys name, in the order first mentioned."""
+    out: list[str] = []
+    for k in keys:
+        if k.startswith("cover:") and k not in out:
+            out.append(k)
+    return out
+
+
+# What a rep needs to go with "is it covered": what it costs to be admitted, and how long a new
+# member waits for it. A hospital clinical category never carries its own dollar benefit or its own
+# wait — Australia's private health data has no such field (docs/DATA_MODEL.md, "Hospital waiting
+# periods are 4 fixed buckets, never per category") — so this is the real, fund-wide context that
+# answers "what does covered actually mean for her", not an invented per-condition figure.
+HOSPITAL_CONTEXT_KEYS = ("excess", "copayment", "known_gap", "wait:PreExisting", "wait:Other")
+
+
+def hospital_context(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], *,
+                     cfg: Optional[dict] = None) -> list[Difference]:
+    """The excess, co-payment, known gap cover and waiting periods that apply to any hospital
+    admission, shown once alongside whichever clinical categories were asked about rather than
+    repeated per category, since none of them are specific to one condition."""
+    n, c = vals.get(navy_id, {}), vals.get(comp_id, {})
+    return [compare_pair(k, n.get(k), c.get(k), cfg) for k in HOSPITAL_CONTEXT_KEYS if n.get(k) or c.get(k)]
+
+
 def claim_groups(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], *,
                  services: list[str], cfg: Optional[dict] = None) -> list["ServiceClaim"]:
     """One block per service that either policy has data for: whether it's covered, the items billed

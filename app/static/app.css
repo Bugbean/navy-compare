@@ -232,6 +232,8 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .claim-block .qa { margin-bottom: 4px; }
 .claim-block .qa:last-child { margin-bottom: 0; }
 .claim-more { margin: 2px 0 4px; }
+.hospital-context { border-style: dashed; }
+.hospital-context .claim-head { flex-direction: column; align-items: flex-start; gap: .1rem; }
 .price-line { margin-bottom: .8rem; font-size: .95rem; }
 .price-line .vs { color: var(--muted); margin: 0 .3rem; }
 

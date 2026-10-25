@@ -43,3 +43,21 @@ def test_benefit_words_for_the_browser_skip_filler():
     found = _benefit_words()
     assert not set(found) & lang.STOP_WORDS
     assert all(len(w) >= 3 for w in found)
+
+
+def test_every_clinical_category_is_reachable_by_its_own_plain_name_not_just_a_hand_picked_synonym():
+    # Before this, a category with no entry in config.features.SYNONYMS (most of them) could not be
+    # typed by name at all client-side; "bone joint and muscle" was one of them.
+    from app.call import _benefit_words
+    found = _benefit_words()
+    assert found["bone"] == ["cover:BoneJointMuscle"]
+    assert "cover:BoneJointMuscle" in found["joint"] and "cover:BoneJointMuscle" in found["muscle"]
+    assert found["digestive"] == ["cover:DigestiveSystem"]
+
+
+def test_annual_limit_words_are_too_generic_to_mean_one_service_alone():
+    # Every one of the 27 "Extras limits" labels ends in "annual limit"; matching on those two words
+    # alone would set the focus to all 27 services instead of naming any one of them.
+    from app.call import _benefit_words
+    found = _benefit_words()
+    assert "annual" not in found and "limit" not in found

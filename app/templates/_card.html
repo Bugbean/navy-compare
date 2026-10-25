@@ -64,6 +64,16 @@
         </div>
       {% endif %}
 
+      {% if s.hospital %}
+        <div class="claim-block hospital-context">
+          <div class="claim-head">
+            <h4>What applies on admission</h4>
+            <span class="muted small">a hospital condition has no dollar benefit of its own — this is what the member actually pays and waits on</span>
+          </div>
+          {% for d in s.hospital %}{{ qa_row(d, by_id[c.comp_id].fund_name) }}{% endfor %}
+        </div>
+      {% endif %}
+
       {% if c.price and c.price.navy and c.price.comp %}
         <p class="price-line">
           <strong>{{ c.price.navy.display }}</strong> <span class="muted">{{ c.price.navy.note }}</span>
