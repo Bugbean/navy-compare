@@ -24,9 +24,19 @@
   const words = (t) => (String(t || "").toLowerCase().replace(/['’]/g, "").replace(/\+/g, " plus ").replace(/&/g, " and ")
     .match(/[a-z0-9]+/g) || []);
   const bar = $("#bar"), suggestBox = $("#suggest"), sentence = $("#sentence"), questionBox = $("#question"),
-    notice = $("#notice"), result = $("#result"), thinking = $("#thinking");
+    notice = $("#notice"), result = $("#result"), thinking = $("#thinking"), dock = $(".chat-dock");
   const MAX_POLICIES = 10;
   const QUESTION_WORDS = new Set(["what", "whats", "is", "does", "do", "how", "which", "can", "are"]);
+
+  // The dock (the sentence, any question, and the bar) is fixed to the bottom of the screen like a
+  // chat composer, so the content above always has enough bottom padding to clear it, even as a
+  // clarifying question or a two-line sentence changes how tall the dock is.
+  if (dock) {
+    const syncDockHeight = () => document.documentElement.style.setProperty("--dock-h", `${dock.offsetHeight}px`);
+    syncDockHeight();
+    if (window.ResizeObserver) new ResizeObserver(syncDockHeight).observe(dock);
+    else window.addEventListener("resize", syncDockHeight);
+  }
 
   // ── the comparison on screen ─────────────────────────────────────────────────
   const S = {
@@ -440,10 +450,15 @@
     menu = document.createElement("div");
     menu.className = "menu";
     menu.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}">${esc(it.label)}${it.sub ? ` <span class="muted small">${esc(it.sub)}</span>` : ""}</button>`).join("");
+    menu.style.visibility = "hidden";
     document.body.appendChild(menu);
     const r = anchor.getBoundingClientRect();
+    // The sentence lives in the bottom dock, so there is rarely room below the chip: open upward
+    // whenever the menu would otherwise run past the bottom of the screen.
+    const below = r.bottom + 4 + menu.offsetHeight <= window.innerHeight;
     menu.style.left = `${r.left + window.scrollX}px`;
-    menu.style.top = `${r.bottom + window.scrollY + 4}px`;
+    menu.style.top = below ? `${r.bottom + window.scrollY + 4}px` : `${r.top + window.scrollY - menu.offsetHeight - 4}px`;
+    menu.style.visibility = "";
     $$("button", menu).forEach((b) => b.addEventListener("click", () => { items[Number(b.dataset.i)].run(); closeMenu(); renderSentence(); compare(true); }));
   }
   document.addEventListener("click", (e) => { if (menu && !menu.contains(e.target) && !e.target.closest(".tok[data-menu]")) closeMenu(); });

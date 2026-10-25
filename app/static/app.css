@@ -111,11 +111,20 @@ tr:hover td { background: var(--row-hover); }
 kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px;
       border-radius: 4px; font: 600 .72rem/1.4 ui-monospace, Consolas, monospace; text-align: center; background: var(--surface); color: var(--text); }
 
-.call-screen { max-width: 1100px; margin: 0 auto; }
+.call-screen { max-width: 1100px; margin: 0 auto; padding-bottom: var(--dock-h, 170px); }
 .call-screen section { margin-bottom: 1.4rem; }
 
+/* The chat dock: like a messaging app, the typing bar stays fixed at the bottom of the viewport so a
+   rep can keep asking follow-ups ("what about dental?") without scrolling back up through the card.
+   --dock-h is kept in sync with its real height by call.js, since a clarifying question or a sentence
+   that wraps to two lines changes how tall it is. */
+.chat-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg);
+             border-top: 1px solid var(--border); box-shadow: 0 -6px 20px rgba(0,0,0,.08); }
+.chat-dock-inner { max-width: 1100px; margin: 0 auto; padding: .55rem 2rem calc(.6rem + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 640px) { .chat-dock-inner { padding-left: 16px; padding-right: 16px; } }
+
 /* The bar: the one place the rep types. */
-.bar-wrap { position: sticky; top: 0; z-index: 20; padding: .6rem 0 .3rem; background: var(--bg); }
+.bar-wrap { position: relative; }
 .bar { display: flex; align-items: center; gap: .6rem; background: var(--surface); border: 2px solid var(--border);
        border-radius: 12px; padding: 0 .9rem; box-shadow: 0 2px 10px rgba(0,0,0,.05); transition: border-color .12s; }
 .bar:focus-within { border-color: var(--accent); box-shadow: 0 2px 14px var(--tint-accent-hi); }
@@ -131,8 +140,9 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 @keyframes pulse { 0%, 100% { opacity: .2; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .thinking i { animation: none; opacity: .7; } }
 
-.suggest { position: absolute; z-index: 30; left: 0; right: 0; margin-top: 4px; max-height: 420px; overflow-y: auto;
-           background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.14); }
+/* The dock sits at the bottom of the screen, so its suggestions open upward, above the bar. */
+.suggest { position: absolute; z-index: 30; left: 0; right: 0; bottom: 100%; top: auto; margin-bottom: 4px; max-height: 50vh; overflow-y: auto;
+           background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 -10px 28px rgba(0,0,0,.14); }
 .suggest[hidden] { display: none; }
 .suggest .hdr { padding: 7px 12px; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--bg); }
 .suggest .opt { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; padding: 8px 12px; cursor: pointer;
@@ -185,7 +195,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .result.loading { opacity: .55; }
 .empty-state { padding: 1.4rem 0; }
 .empty-state p { margin-bottom: .5rem; }
-.keys { margin-top: 1rem; }
+.keys { margin-top: .5rem; }
 .context-line { margin: .6rem 0 .8rem; }
 
 /* The answer: the verdict first, then the answer to what was asked, then what to say. */

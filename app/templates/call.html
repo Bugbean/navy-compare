@@ -2,31 +2,34 @@
 {% block title %}Compare — Navy Health Policy Compare{% endblock %}
 {% block content %}
 <div class="call-screen" data-csrf="{{ csrf }}">
-  <div class="bar-wrap">
-    <div class="bar">
-      <span class="bar-icon" aria-hidden="true">⌕</span>
-      <input type="text" id="bar" autocomplete="off" spellcheck="false" maxlength="500"
-             role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list"
-             placeholder="Type what the member says: “HCF bronze plus 750, couple in NSW, worried about her knees”">
-      <span class="thinking" id="thinking" hidden title="Reading the rest of what you typed"><i></i><i></i><i></i></span>
-      <button type="button" class="link-btn" id="new-call" title="Esc on an empty bar">New call</button>
-    </div>
-    <div class="suggest" id="suggest" role="listbox" hidden></div>
-  </div>
-
-  <div class="sentence" id="sentence" aria-live="polite"></div>
-  <div class="question" id="question" hidden></div>
-  <div class="notice" id="notice" hidden></div>
-
   <section id="result" class="result" aria-live="polite">
     <div class="empty-state">
       <p><strong>Type the competitor's policy the way the member says it.</strong> The company is enough to start.</p>
       <p class="muted small">Try “bupa silver plus”, “defence gold”, “frank” or “our premium gold 750 vs hcf”. Then ask follow-ups in the same bar: “what about dental?”, “add medibank”, “cheaper option?”.</p>
     </div>
   </section>
-  <p class="keys muted small">
-    <kbd>/</kbd> type · <kbd>↑</kbd><kbd>↓</kbd> <kbd>Enter</kbd> pick · <kbd>1</kbd>–<kbd>6</kbd> answer a question · <kbd>Esc</kbd> clear, twice for a new call
-  </p>
+
+  <div class="chat-dock">
+    <div class="chat-dock-inner">
+      <div class="sentence" id="sentence" aria-live="polite"></div>
+      <div class="question" id="question" hidden></div>
+      <div class="notice" id="notice" hidden></div>
+      <div class="bar-wrap">
+        <div class="suggest" id="suggest" role="listbox" hidden></div>
+        <div class="bar">
+          <span class="bar-icon" aria-hidden="true">⌕</span>
+          <input type="text" id="bar" autocomplete="off" spellcheck="false" maxlength="500"
+                 role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list"
+                 placeholder="Type what the member says: “HCF bronze plus 750, couple in NSW, worried about her knees”">
+          <span class="thinking" id="thinking" hidden title="Reading the rest of what you typed"><i></i><i></i><i></i></span>
+          <button type="button" class="link-btn" id="new-call" title="Esc on an empty bar">New call</button>
+        </div>
+      </div>
+      <p class="keys muted small">
+        <kbd>/</kbd> type · <kbd>↑</kbd><kbd>↓</kbd> <kbd>Enter</kbd> pick · <kbd>1</kbd>–<kbd>6</kbd> answer a question · <kbd>Esc</kbd> clear, twice for a new call
+      </p>
+    </div>
+  </div>
 </div>
 <script src="{{ url_for('static', filename='call.js') }}" defer></script>
 {% endblock %}
