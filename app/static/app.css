@@ -44,11 +44,16 @@ body {
   min-height: 100vh;
 }
 
-.topbar { display: flex; gap: 1.2rem; align-items: center; padding: 10px 2rem;
+.topbar { display: flex; gap: 1.2rem; align-items: center; padding: 8px 2rem;
           background: var(--surface); border-bottom: 1px solid var(--border); }
 .topbar a { color: var(--muted); text-decoration: none; font-size: 0.88rem; }
 .topbar a:hover { color: var(--text); }
-.topbar .brand { color: var(--accent); font-weight: 700; font-size: 1rem; }
+.topbar .brand { display: flex; align-items: center; gap: .6rem; color: var(--accent); font-weight: 700; font-size: 1rem; }
+/* The logo's wordmark is dark navy on a transparent background: legible on the light topbar, but
+   it would nearly vanish on the dark one, so it sits on its own small white chip in both themes. */
+.brand-mark { display: inline-flex; align-items: center; background: #fff; border-radius: 5px; padding: 4px 8px; }
+.brand-mark img { display: block; height: 22px; width: auto; }
+.brand-text { font-size: .82rem; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
 .topbar .spacer { flex: 1; }
 .topbar .who { color: var(--muted); font-size: 0.82rem; }
 
@@ -203,6 +208,20 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .qa.navy_better .qa-verdict { color: var(--green); }
 .qa.comp_better .qa-verdict { color: var(--neg-text); }
 @media (max-width: 760px) { .qa { grid-template-columns: 1fr 1fr; } .qa-label, .qa-verdict { grid-column: 1 / -1; } }
+
+/* What a member can actually claim, by service: what it pays per item, what the year caps it at.
+   The same .qa row as the direct answer above, grouped under the service so a rep can read the
+   whole picture for "what about dental?" in one place instead of hunting the table for it. */
+.claims { display: flex; flex-direction: column; gap: .9rem; margin: .2rem 0 .9rem; }
+.claim-block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .7rem .8rem; }
+.claim-head { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .45rem; flex-wrap: wrap; }
+.claim-head h4 { font-size: .92rem; }
+.claim-flag { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; border-radius: 999px; padding: 1px 8px; background: var(--bg); color: var(--muted); }
+.claim-flag.navy_better { background: var(--tint-good); color: var(--green); }
+.claim-flag.comp_better { background: var(--tint-bad); color: var(--neg-text); }
+.claim-block .qa { margin-bottom: 4px; }
+.claim-block .qa:last-child { margin-bottom: 0; }
+.claim-more { margin: 2px 0 4px; }
 .price-line { margin-bottom: .8rem; font-size: .95rem; }
 .price-line .vs { color: var(--muted); margin: 0 .3rem; }
 

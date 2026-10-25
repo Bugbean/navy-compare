@@ -10,7 +10,10 @@
 <body>
   {% if current_user %}
   <nav class="topbar">
-    <a class="brand" href="{{ url_for('home') }}">Policy Compare</a>
+    <a class="brand" href="{{ url_for('home') }}">
+      <span class="brand-mark"><img src="{{ url_for('static', filename='navy-health-logo.webp') }}" alt="Navy Health"></span>
+      <span class="brand-text">Policy Compare</span>
+    </a>
     {% if current_user.is_admin %}
     <a href="{{ url_for('admin.overview') }}">Admin</a>
     <a href="{{ url_for('auth.admin_users') }}">Users</a>

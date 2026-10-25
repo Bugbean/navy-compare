@@ -40,6 +40,7 @@ from config import language as lang
 from config.reference import DEPENDANT_TITLES, FAMILY_TYPES, STATES
 from engine import benefits as bn
 from engine import catalog as cat
+from engine import claims as cl
 from engine import differences as df
 from engine import materiality as mat
 from engine import plan as planning
@@ -282,13 +283,20 @@ def card():
                                            state=sel.state, family=sel.family, scope=sel.scope)
         except EngineError:
             cheaper = []
+    # A focused benefit either names an extras service (dental, physio, optical...) or it doesn't
+    # (price, a clinical category, a waiting period). A service gets the fuller claim block below —
+    # covered, what each item pays back, what the year caps it at — everything else stays the plain
+    # one-line direct answer.
+    focus_services = cl.services_in(sel.focus)
+    focus_other = [k for k in sel.focus if not feats.item_service(k)]
     shown = []
     for c in cards:
         nname = by_id[c.navy_id]["name"]
         answers = [df.compare_pair(k, vals.get(c.navy_id, {}).get(k), vals.get(c.comp_id, {}).get(k))
-                   for k in sel.focus if vals.get(c.navy_id, {}).get(k) or vals.get(c.comp_id, {}).get(k)]
+                   for k in focus_other if vals.get(c.navy_id, {}).get(k) or vals.get(c.comp_id, {}).get(k)]
+        claim_blocks = cl.claim_groups(c.navy_id, c.comp_id, vals, services=focus_services) if focus_services else []
         shown.append({"card": c, "verdict": suggest.verdict(c, nname, by_id[c.comp_id]["fund_name"]),
-                      "answers": answers})
+                      "answers": answers, "claims": claim_blocks})
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
     heads = []

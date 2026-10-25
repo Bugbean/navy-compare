@@ -7,6 +7,14 @@
     <span class="mat mat-{{ d.materiality }}" title="How much this matters: {{ d.materiality }} of 3"></span>
   </li>
 {%- endmacro %}
+{% macro qa_row(d, comp_fund, label_override=none) -%}
+  <div class="qa {{ d.direction }}">
+    <span class="qa-label">{{ label_override or d.label }}</span>
+    <span class="qa-navy"><span class="who">Navy Health</span> {{ side(d.navy) }}</span>
+    <span class="qa-comp"><span class="who">{{ comp_fund }}</span> {{ side(d.comp) }}</span>
+    <span class="qa-verdict">{% if d.direction == 'navy_better' %}Navy Health is better{% elif d.direction == 'comp_better' %}Theirs is better{% elif d.direction == 'same' %}The same{% elif d.direction == 'trade_off' %}A trade-off{% elif d.direction == 'missing' %}Only one has it{% else %}Different{% endif %}</span>
+  </div>
+{%- endmacro %}
 
 {% if error %}
   <p class="error">{{ error }}</p>
@@ -34,12 +42,23 @@
 
       {% if s.answers %}
         <div class="direct-answer">
-          {% for d in s.answers %}
-            <div class="qa {{ d.direction }}">
-              <span class="qa-label">{{ d.label }}</span>
-              <span class="qa-navy"><span class="who">Navy Health</span> {{ side(d.navy) }}</span>
-              <span class="qa-comp"><span class="who">{{ by_id[c.comp_id].fund_name }}</span> {{ side(d.comp) }}</span>
-              <span class="qa-verdict">{% if d.direction == 'navy_better' %}Navy Health is better{% elif d.direction == 'comp_better' %}Theirs is better{% elif d.direction == 'same' %}The same{% elif d.direction == 'trade_off' %}A trade-off{% elif d.direction == 'missing' %}Only one has it{% else %}Different{% endif %}</span>
+          {% for d in s.answers %}{{ qa_row(d, by_id[c.comp_id].fund_name) }}{% endfor %}
+        </div>
+      {% endif %}
+
+      {% if s.claims %}
+        <div class="claims">
+          {% for blk in s.claims %}
+            <div class="claim-block">
+              <div class="claim-head">
+                <h4>{{ blk.label }}</h4>
+                {% if blk.coverage and blk.coverage.direction != 'same' %}
+                  <span class="claim-flag {{ blk.coverage.direction }}">{% if blk.coverage.direction == 'navy_better' %}Navy Health only{% elif blk.coverage.direction == 'comp_better' %}Theirs only{% elif blk.coverage.direction == 'missing' %}Only one covers it{% else %}Covered differently{% endif %}</span>
+                {% endif %}
+              </div>
+              {% for it in blk.items %}{{ qa_row(it, by_id[c.comp_id].fund_name) }}{% endfor %}
+              {% if blk.more %}<p class="muted small claim-more">+{{ blk.more }} more billed item{{ 's' if blk.more != 1 else '' }} under {{ blk.label | lower }}</p>{% endif %}
+              {% if blk.limit %}{{ qa_row(blk.limit, by_id[c.comp_id].fund_name, label_override='Annual limit') }}{% endif %}
             </div>
           {% endfor %}
         </div>
