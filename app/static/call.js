@@ -398,9 +398,23 @@
       .concat(preview.filter((r) => r.policy.navy).map((r) => chip(esc(r.policy.name), "tok-policy tok-navy tok-preview")));
     const pendingQ = (live ? live.refs.filter((r) => !r.policy) : []).concat(S.questions);
     pendingQ.forEach((r) => comps.push(chip(`“${esc(r.text)}”?`, "tok-ask", "")));
-    if (!comps.length && !navs.length && !pendingQ.length && !S.autoNavy) {
+    const needsPending = S.needs.size > 0 || (live && live.needs.length > 0);
+    if (!comps.length && !navs.length && !pendingQ.length && !S.autoNavy && !needsPending) {
       sentence.innerHTML = live && live.ignored.length
         ? `<span class="muted small">Not recognised yet: ${live.ignored.map(esc).join(", ")}</span>` : "";
+      renderQuestion();
+      return;
+    }
+    if (!comps.length && !navs.length && !pendingQ.length && !S.autoNavy) {
+      // Only a need so far (no policy named yet): show it on its own, waiting for a policy to compare.
+      const needs = new Set([...S.needs, ...(live ? live.needs : [])]);
+      const chipLabel = (k) => (IX.chips.find((c) => c.key === k) || { label: k }).label;
+      const needHtml = [...needs].map((k) => chip(esc(chipLabel(k)), "tok-need" + (S.needs.has(k) ? "" : " tok-preview"), `data-need="${k}"`, S.needs.has(k))).join(" ");
+      sentence.innerHTML = `needs ${needHtml} <span class="muted small">— waiting on a policy</span>`;
+      $$(".tok .x", sentence).forEach((b) => b.addEventListener("click", (e) => {
+        const t = e.target.closest(".tok");
+        if (t.dataset.need) { S.needs.delete(t.dataset.need); renderSentence(); compare(true); }
+      }));
       renderQuestion();
       return;
     }
@@ -636,10 +650,27 @@
     if (S.showAll) p.set("all", "1");
     return p;
   }
+  function noPolicyMessage() {
+    // Nothing to compare yet. Never leave the screen blank with no explanation — say exactly what
+    // is still needed, using whatever was already understood (a question pending, a benefit named).
+    if (S.questions.length) return `<div class="empty-state"><p><strong>Answer the question above to continue.</strong></p></div>`;
+    const needLabels = [...S.needs].map((k) => (IX.chips.find((c) => c.key === k) || { label: k }).label);
+    if (needLabels.length) {
+      return `<div class="empty-state"><p><strong>Got it — ${esc(needLabels.join(" and "))} noted.</strong>
+        Now name a policy to compare it against, for example “HCF bronze plus” or “our premium gold”.</p></div>`;
+    }
+    return `<div class="empty-state">
+      <p><strong>Type the competitor's policy the way the member says it.</strong> The company is enough to start.</p>
+      <p class="muted small">Try “bupa silver plus”, “defence gold”, “frank” or “our premium gold 750 vs hcf”. Then ask follow-ups in the same bar: “what about dental?”, “add medibank”, “cheaper option?”.</p>
+    </div>`;
+  }
   async function compare(committed) {
     const extra = !committed && live ? live.refs.filter((r) => r.policy).map((r) => r.policy.id) : [];
     const params = cardParams(extra);
-    if (!params.get("ids")) { if (committed) { kept = null; result.innerHTML = ""; } return; }
+    if (!params.get("ids")) {
+      if (committed) { kept = null; result.innerHTML = noPolicyMessage(); }
+      return;
+    }
     const mine = ++latestCard;
     previewInFlight = !committed;
     result.classList.add("loading");
