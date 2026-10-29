@@ -69,6 +69,63 @@ CATEGORY_LABELS: dict[str, str] = {
     "WeightLossSurgery": "Weight loss surgery",
 }
 
+# What each of the 38 clinical categories actually covers, in plain English, so a rep can tell a
+# member what "covered" or "not covered" means rather than just the category's name. These are the
+# government's own standard, fund-independent definitions (every fund is scored against the same 38
+# categories precisely so they mean the same thing everywhere) — condensed from the consumer-facing
+# summary at privatehealth.gov.au/health_insurance/howitworks/clinical_categories.htm, checked against
+# the Department of Health's "Private Health Insurance clinical category ... definitions" series
+# (health.gov.au). The underlying MBS item lists behind each category change periodically; what is
+# fixed, and what this file holds, is the category's scope. General information, not medical advice.
+CATEGORY_DEFINITIONS: dict[str, str] = {
+    "AssistedReproductive": "Fertility procedures, such as egg or sperm retrieval and IVF.",
+    "BackNeckSpine": "Spinal and back conditions, including spinal fusion and scoliosis.",
+    "Blood": "Blood disorders, including clotting problems and bone marrow transplants.",
+    "BoneJointMuscle": "Injuries and diseases of the musculoskeletal system, such as fractures and bone infections.",
+    "BrainNervousSystem": "Brain, spinal cord and peripheral nerve conditions, such as stroke and epilepsy.",
+    "BreastSurgery": "Breast disorders and related lymph nodes, and reconstruction after breast surgery. "
+                      "Cosmetic surgery that isn't medically necessary isn't included.",
+    "Cataracts": "Surgery to remove a cataract and replace it with an artificial lens.",
+    "ChemotherapyRadiotherapyImmunotherapy": "Treating cancer or a benign tumour with chemotherapy, "
+                                              "radiotherapy or immunotherapy.",
+    "DentalSurgery": "Surgery on the teeth and gums, such as wisdom tooth removal.",
+    "Diabetes": "Investigating and managing diabetes, such as unstable blood sugar.",
+    "Dialysis": "Dialysis for long-term (chronic) kidney failure.",
+    "DigestiveSystem": "Organs from the oesophagus to the bowel, including the liver and gallbladder.",
+    "EarNoseThroat": "The ears, nose, throat, thyroid and surrounding head and neck.",
+    "Eye": "The eye and the eye socket (cataracts are their own category).",
+    "GastrointestinalEndoscopy": "Diagnosing and treating the digestive tract with an endoscope, such as a "
+                                  "colonoscopy.",
+    "Gynaecology": "The female reproductive system, such as endometriosis and cervical cancer.",
+    "HeartVascular": "The heart and blood vessels, including heart failure and varicose veins.",
+    "HerniaAppendix": "Hernias and appendicitis.",
+    "HospitalPsychiatric": "Mental health, addiction and behavioural disorders.",
+    "ImplantationHearingDevices": "Correcting hearing loss, including implanting a hearing prosthesis.",
+    "InsulinPumps": "Supplying and replacing insulin pumps for diabetes.",
+    "JointReconstructions": "Surgery to repair a joint, such as a torn tendon or ligament damage.",
+    "JointReplacements": "Surgery to replace or revise a joint, including a partial replacement.",
+    "KidneyBladder": "The kidneys, adrenal glands and bladder, such as kidney stones and incontinence.",
+    "LungChest": "The lungs, chest and mediastinum, including lung cancer and asthma.",
+    "MaleReproductive": "Male reproductive organs including the prostate, such as prostate cancer.",
+    "MiscarriageTerminationOfPregnancy": "Care for a miscarriage or a terminated pregnancy.",
+    "PainManagement": "Pain treatment that doesn't involve inserting or managing a device, such as a nerve "
+                       "block.",
+    "PainManagementWithDevice": "Implanting, replacing or managing a pain-relief device, such as a "
+                                 "neurostimulator.",
+    "PalliativeCare": "Care focused on quality of life for a terminal illness, including pain relief.",
+    "PlasticReconstructiveSurgery": "Medically necessary surgery for a physical deformity from illness, "
+                                     "injury or birth.",
+    "PodiatricSurgery": "Foot and ankle conditions treated by a registered podiatric surgeon.",
+    "PregnancyBirth": "Pregnancy and childbirth. Treating the baby falls under its own relevant category.",
+    "Rehabilitation": "Physical rehabilitation after surgery or illness, such as stroke or cardiac recovery.",
+    "Skin": "Skin, nails and skin-related conditions, including melanoma, wounds and removing a foreign body.",
+    "SleepStudies": "Investigating sleep patterns and disorders, such as sleep apnoea.",
+    "TonsilsAdenoidsGrommets": "The tonsils and adenoids, and inserting or removing grommets.",
+    "WeightLossSurgery": "Surgery to reduce weight, remove excess skin after weight loss, or reverse a "
+                          "bariatric procedure.",
+}
+assert set(CATEGORY_DEFINITIONS) == set(CATEGORY_LABELS), "every clinical category needs a definition"
+
 SERVICE_LABELS: dict[str, str] = {
     "Acupuncture": "Acupuncture",
     "AntenatalPostnatal": "Antenatal and postnatal",

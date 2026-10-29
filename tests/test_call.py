@@ -239,3 +239,32 @@ def test_the_planner_sends_the_screen_and_caches_its_instructions():
     odd = NS(messages=NS(create=lambda **kw: NS(usage=None, content=[
         NS(type="tool_use", name="plan_request", input={"intent": "dance", "confidence": 0.8})])))
     assert planning.plan("x", client=odd, model="m").intent == "compare"
+
+
+def test_every_clinical_category_has_a_plain_english_definition():
+    import app.call as call
+    from config.features import CATEGORY_LABELS
+    assert set(call.CAT_DEFS) == {f"cover:{k}" for k in CATEGORY_LABELS}
+    assert all(d.strip() and d[0].isupper() for d in call.CAT_DEFS.values())
+
+
+def test_a_clinical_category_difference_explains_itself_on_the_card(client):
+    # Rendered directly against the template, with a hand-built difference, so this does not depend on
+    # which two policies happen to differ on a category in whichever database is configured.
+    import app.call as call
+    from engine.benefits import Value
+    from engine.differences import Card, compare_pair
+    navy = Value("cover:BoneJointMuscle", "cover_category", "Covered", 2.0, 2.0)
+    comp = Value("cover:BoneJointMuscle", "cover_category", "Not covered", 0.0, 0.0)
+    d = compare_pair("cover:BoneJointMuscle", navy, comp)
+    c = Card(navy_id=1, comp_id=2, stronger=[d], watch=[], trade_offs=[], same=[], missing=[], price=None)
+    with client.application.app_context():
+        from flask import render_template
+        html = render_template(
+            "_card.html", error=None, heads=[], by_id={1: {"name": "Navy"}, 2: {"name": "Comp", "fund_name": "HCF"}},
+            shown=[{"card": c, "verdict": "x", "answers": [], "claims": [], "hospital": []}], rows=[],
+            state="NSW", family="couple", scope="", anchor=None, chips=set(), show_all=False, wanted=None,
+            focus=[], snapshot=1, release_date="2026-01-01", missing_rates=[], chip_rows=set(),
+            excess_options=[], followups=[], auto=None, meta={}, comp_only=False, cat_defs=call.CAT_DEFS)
+    assert "Injuries and diseases of the musculoskeletal system" in html
+    assert "Not covered with HCF: without it there, the member would need the public system or pay privately" in html

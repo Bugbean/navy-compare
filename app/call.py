@@ -74,6 +74,10 @@ def call_screen():
                            chips=mat.chips())
 
 
+# What each clinical category actually covers, in plain English, keyed the way a Difference names it
+# ("cover:BoneJointMuscle") so the card template can look a row's definition up directly.
+CAT_DEFS = {f"cover:{k}": v for k, v in feats.CATEGORY_DEFINITIONS.items()}
+
 _CATEGORY_GROUPS = {"Clinical categories", "Extras services", "Extras limits"}
 # "annual limit" is in every one of the 27 "Extras limits" labels, so on their own these two words
 # would set the focus to all 27 services at once rather than naming any benefit.
@@ -346,7 +350,7 @@ def card():
         missing_rates=[by_id[i]["name"] for i in columns if "price" not in vals.get(i, {})],
         chip_rows={r.key for r in rows if r.tags & sel.chips},
         excess_options=sorted({float(r["excess"] or 0) for r in data["rates"]}),
-        followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids))
+        followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids), cat_defs=CAT_DEFS)
 
 
 def _talk_pack(sel: "Selection", navy_id: int, comp_id: int):

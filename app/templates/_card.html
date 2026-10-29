@@ -1,10 +1,23 @@
 {# The answer to what the rep typed: answer first, then the card, then what to do next, then the table. #}
 {% macro side(v) -%}{% if v %}{{ v.display }}{% if v.note %} <span class="muted">{{ v.note }}</span>{% endif %}{% else %}<span class="muted">not part of this policy</span>{% endif %}{%- endmacro %}
-{% macro diff_line(d) -%}
+{# What a clinical category actually covers, and — when only one side has it — what going without it
+   actually means, so "Covered" is never shown as a bare, unexplained badge. #}
+{% macro cat_note(d, comp_fund) -%}
+  {% if d.kind == 'cover_category' and d.key in cat_defs %}
+    <p class="cat-def muted small">{{ cat_defs[d.key] }}</p>
+    {% if d.direction == 'navy_better' %}
+      <p class="cat-consequence muted small">Not covered with {{ comp_fund }}: without it there, the member would need the public system or pay privately for it.</p>
+    {% elif d.direction == 'comp_better' %}
+      <p class="cat-consequence muted small">Not covered with Navy Health: without it here, the member would need the public system or pay privately for it.</p>
+    {% endif %}
+  {% endif %}
+{%- endmacro %}
+{% macro diff_line(d, comp_fund=none) -%}
   <li class="diff{% if d.chip_match %} need{% endif %}">
     <span class="diff-label">{{ d.label }}{% if d.chip_match %} <span class="need-mark" title="Matches what the member cares about">need</span>{% endif %}</span>
     <span class="diff-vals"><span class="v-navy">{{ side(d.navy) }}</span><span class="vs">vs</span><span class="v-comp">{{ side(d.comp) }}</span></span>
     <span class="mat mat-{{ d.materiality }}" title="How much this matters: {{ d.materiality }} of 3"></span>
+    {{ cat_note(d, comp_fund) }}
   </li>
 {%- endmacro %}
 {% macro qa_row(d, comp_fund, label_override=none) -%}
@@ -13,6 +26,7 @@
     <span class="qa-navy"><span class="who">Navy Health</span> {{ side(d.navy) }}</span>
     <span class="qa-comp"><span class="who">{{ comp_fund }}</span> {{ side(d.comp) }}</span>
     <span class="qa-verdict">{% if d.direction == 'navy_better' %}Navy Health is better{% elif d.direction == 'comp_better' %}Theirs is better{% elif d.direction == 'same' %}The same{% elif d.direction == 'trade_off' %}A trade-off{% elif d.direction == 'missing' %}Only one has it{% else %}Different{% endif %}</span>
+    {{ cat_note(d, comp_fund) }}
   </div>
 {%- endmacro %}
 
@@ -106,25 +120,25 @@
         <div class="col-better">
           <h4>Where Navy Health is better <span class="count">{{ c.stronger | length }}</span></h4>
           {% if c.stronger %}
-            <ul>{% for d in c.stronger[:5] %}{{ diff_line(d) }}{% endfor %}</ul>
+            <ul>{% for d in c.stronger[:5] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
             {% if c.stronger | length > 5 %}
-              <details><summary>{{ c.stronger | length - 5 }} more</summary><ul>{% for d in c.stronger[5:] %}{{ diff_line(d) }}{% endfor %}</ul></details>
+              <details><summary>{{ c.stronger | length - 5 }} more</summary><ul>{% for d in c.stronger[5:] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul></details>
             {% endif %}
           {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
         </div>
         <div class="col-watch">
           <h4>Where theirs is better <span class="count">{{ c.watch | length }}</span></h4>
           {% if c.watch %}
-            <ul>{% for d in c.watch[:3] %}{{ diff_line(d) }}{% endfor %}</ul>
+            <ul>{% for d in c.watch[:3] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
             {% if c.watch | length > 3 %}
-              <details><summary>{{ c.watch | length - 3 }} more</summary><ul>{% for d in c.watch[3:] %}{{ diff_line(d) }}{% endfor %}</ul></details>
+              <details><summary>{{ c.watch | length - 3 }} more</summary><ul>{% for d in c.watch[3:] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul></details>
             {% endif %}
           {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
         </div>
       </div>
       {% if c.trade_offs %}
         <details class="tradeoffs"><summary>Different, not better or worse ({{ c.trade_offs | length }})</summary>
-          <ul>{% for d in c.trade_offs %}{{ diff_line(d) }}{% endfor %}</ul>
+          <ul>{% for d in c.trade_offs %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
         </details>
       {% endif %}
     </section>
@@ -177,7 +191,7 @@
                 {% set ns.group = r.group %}
               {% endif %}
               <tr class="{{ 'same' if r.same else '' }}{{ ' need' if r.key in chip_rows else '' }}{{ ' focus' if r.key in focus else '' }}">
-                <td class="benefit-col">{{ r.label }}</td>
+                <td class="benefit-col"{% if r.key in cat_defs %} title="{{ cat_defs[r.key] }}"{% endif %}>{{ r.label }}</td>
                 {% for v in r.cells %}
                   <td class="{{ 'best' if loop.index0 in r.best else '' }}">
                     {{ side(v) }}{% if loop.index0 in r.best %} <span class="badge-better">better</span>{% endif %}
