@@ -709,6 +709,13 @@
       if (!box.dataset.lazy && committed) talk(box);
       else if (!box.dataset.lazy) $(".talk-text", box).innerHTML = `<p class="muted small">Press Enter to confirm, and I'll write what to say.</p>`;
     });
+    $$(".objections", result).forEach((box) => {
+      const input = $(".objection-input", box), ask = $(".objection-ask", box);
+      $$(".objection-preset", box).forEach((b) => b.addEventListener("click", () => askObjection(box, { preset: b.dataset.preset, label: b.textContent })));
+      const go = () => { const text = input.value.trim(); if (text) { askObjection(box, { text }); input.value = ""; } };
+      if (ask) ask.addEventListener("click", go);
+      if (input) input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+    });
   }
   function followUp(b) {
     const kind = b.dataset.kind;
@@ -763,32 +770,41 @@
       listeners.forEach((fn) => fn(ev));
     };
     try {
-      const r = await fetch("/script/stream", { method: "POST", body, credentials: "same-origin" });
-      const type = r.headers.get("content-type") || "";
-      if (type.includes("application/json")) { const d = await r.json(); emit(d.error ? { type: "error", error: d.error } : { type: "done", text: d.text, outcome: d.outcome }); return; }
-      if (!type.includes("text/event-stream")) throw new Error("Your session may have ended. Reload the page.");
-      const handle = (chunk) => chunk.split("\n\n").forEach((block) => {
-        const line = block.split("\n").find((l) => l.startsWith("data: "));
-        if (line) { try { emit(JSON.parse(line.slice(6))); } catch (e) { /* a partial block */ } }
-      });
-      if (r.body && r.body.getReader) {
-        const reader = r.body.getReader(), decoder = new TextDecoder();
-        let buf = "";
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const cut = buf.lastIndexOf("\n\n");
-          if (cut >= 0) { handle(buf.slice(0, cut)); buf = buf.slice(cut + 2); }
-        }
-        if (buf) handle(buf);
-      } else {
-        handle(await r.text());
-      }
+      await streamCompose("/script/stream", body, emit);
     } catch (err) {
       emit({ type: "error", error: err.message });
     } finally {
       if (writing.get(key) === listeners) writing.delete(key);
+    }
+  }
+  // Shared by the talking point and objection replies: read one compose SSE stream, an event at a
+  // time, falling back to a single JSON reply where streaming isn't available.
+  async function streamCompose(url, body, emit) {
+    const r = await fetch(url, { method: "POST", body, credentials: "same-origin" });
+    const type = r.headers.get("content-type") || "";
+    if (type.includes("application/json")) {
+      const d = await r.json();
+      emit(d.error ? { type: "error", error: d.error } : { type: "done", text: d.text, outcome: d.outcome });
+      return;
+    }
+    if (!type.includes("text/event-stream")) throw new Error("Your session may have ended. Reload the page.");
+    const handle = (chunk) => chunk.split("\n\n").forEach((block) => {
+      const line = block.split("\n").find((l) => l.startsWith("data: "));
+      if (line) { try { emit(JSON.parse(line.slice(6))); } catch (e) { /* a partial block */ } }
+    });
+    if (r.body && r.body.getReader) {
+      const reader = r.body.getReader(), decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const cut = buf.lastIndexOf("\n\n");
+        if (cut >= 0) { handle(buf.slice(0, cut)); buf = buf.slice(cut + 2); }
+      }
+      if (buf) handle(buf);
+    } else {
+      handle(await r.text());
     }
   }
   function copyTalk(box) {
@@ -796,6 +812,40 @@
     if (!t) return;
     const text = t.innerText || t.textContent;
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotice("Copied."), () => {});
+  }
+
+  // ── handling what the member actually said, mid-call ─────────────────────────
+  // Every "ask" appends its own entry to the log, so a rep can prepare for more than one objection
+  // (or handle several in the same call) and still see what was asked each time.
+  async function askObjection(box, { preset, text, label }) {
+    const log = $(".objection-log", box);
+    const entry = document.createElement("div");
+    entry.className = "objection-entry";
+    entry.innerHTML = `<p class="objection-said">${esc(label || text)}</p><p class="objection-reply draft muted small">Thinking…</p>`;
+    log.insertBefore(entry, log.firstChild);
+    const body = new FormData();
+    body.append("csrf", csrf);
+    body.append("navy", box.dataset.navy);
+    body.append("comp", box.dataset.comp);
+    if (preset) body.append("preset", preset); else body.append("objection", text);
+    cardParams().forEach((v, k) => { if (k !== "ids" && k !== "focus") body.append(k, v); });
+    const replyEl = () => $(".objection-reply", entry);
+    const show = (ev) => {
+      if (ev.type === "preview") {
+        replyEl().outerHTML = `<p class="objection-reply draft">${esc(ev.text)}</p>`;
+      } else if (ev.type === "done") {
+        const note = ev.outcome === "pass" ? "" : ev.outcome === "partial" ? "Part of this couldn't be checked, so it was dropped."
+          : ev.outcome === "fallback" ? "That didn't pass the checks, so here are the facts instead." : "";
+        replyEl().outerHTML = `<p class="objection-reply">${esc(ev.text).split("\n").join("<br>")}</p>${note ? `<p class="muted small objection-note">${esc(note)}</p>` : ""}`;
+      } else if (ev.type === "error") {
+        replyEl().outerHTML = `<p class="error">${esc(ev.error)}</p>`;
+      }
+    };
+    try {
+      await streamCompose("/script/objection/stream", body, show);
+    } catch (err) {
+      show({ type: "error", error: err.message });
+    }
   }
 
   // ── the model, for what was not recognised ───────────────────────────────────

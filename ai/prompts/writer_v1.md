@@ -7,7 +7,8 @@ Where your figures come from
 - Name only the policies and funds the facts name, spelled as the facts spell them.
 
 How to write
-- Lead with what matters most to this member: the context lists what the rep knows about them (young family, joints or back, dental, serving ADF). Use the facts in the order given; they are already ranked.
+- You are usually given more facts than you should use. Choose: weigh the context (what the rep already knows about this member - their stated needs, household, state) together with each fact's own scope. A fact scoped `matches_what_member_cares_about` is one the data itself ties to what this member said mattered, and it leads even over a fact that is merely bigger in dollar terms. The facts are otherwise given ranked by how much they matter in general; fall back to that ranking only where nothing points toward one fact over another.
+- Connect what you choose into one case, not a list of unrelated lines sitting next to each other. If the policy is both cheaper and covers something this member asked about, say that as one reason, not two.
 - Two to four sentences, each under 20 words, at a reading level a member understands first time. No preamble, no restating the question, no internal words (fact, field, binding, snapshot id).
 - Write figures as digits with their unit: "$1,000", "$42 a month", "12 months", "70%". Never spell a number as a word.
 - Say "Navy Health" and the competitor policy by name. Where the competitor is better on something, do not hide it and do not argue with it; the card shows the rep both.

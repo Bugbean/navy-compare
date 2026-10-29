@@ -169,6 +169,12 @@ def test_the_talking_point_needs_the_form_token(client):
     assert client.post("/script/stream", data={"navy": "1", "comp": "2"}).status_code == 400
 
 
+def test_an_objection_reply_needs_the_form_token(client):
+    data = {"navy": "1", "comp": "2", "preset": "price"}
+    assert client.post("/script/objection", data=data).status_code == 400
+    assert client.post("/script/objection/stream", data=data).status_code == 400
+
+
 @pytest.fixture
 def offline(monkeypatch, client):
     """The call routes with the index built from test rows and no database or model behind them."""
@@ -270,3 +276,67 @@ def test_a_clinical_category_difference_shows_what_it_covers_not_a_restated_verd
     # The Covered/Not covered values already say which side has it; nothing should restate that as a
     # separate sentence ("Not covered with HCF: ...").
     assert "Not covered with" not in html and "public system" not in html
+
+
+def _stub_pack():
+    from ai.facts import EvidencePack, Fact
+    return EvidencePack.of([Fact.model_validate({
+        "fact_id": "F1", "type": "premium", "subject": {}, "value": {"navy": 100, "comp": 120},
+        "unit": "AUD/month", "names": ["Core", "HCF"], "scope": {},
+        "coverage": {"requested": "price", "complete_for_claim": True},
+    })])
+
+
+def test_an_objection_with_no_preset_and_no_text_is_refused(offline):
+    r = offline.post("/script/objection", data={"csrf": "token", "navy": "1", "comp": "2"})
+    assert r.status_code == 400 and "say" in r.get_json()["error"].lower()
+
+
+def test_an_objection_uses_its_own_prompt_and_the_stated_question(offline, monkeypatch):
+    import app.call as call
+    from ai.compose import ComposeResult
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    seen = {}
+
+    def fake_compose(pack, *, client, system, question, context, **kw):
+        seen["system"], seen["question"], seen["context"] = system, question, context
+        return ComposeResult(text="Here is the reply.", outcome="pass")
+    monkeypatch.setattr(call, "compose", fake_compose)
+
+    r = offline.post("/script/objection", data={"csrf": "token", "navy": "1", "comp": "2",
+                                                 "preset": "price", "state": "NSW", "family": "couple"})
+    d = r.get_json()
+    assert r.status_code == 200 and d["text"] == "Here is the reply." and d["outcome"] == "pass"
+    assert d["question"].startswith("The member says the competitor's policy is cheaper.")
+    assert "reply to one specific thing the member just said" in seen["system"]
+    assert seen["question"] == d["question"]
+
+
+def test_an_objection_takes_free_text_over_an_unknown_preset(offline, monkeypatch):
+    import app.call as call
+    from ai.compose import ComposeResult
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    seen = {}
+
+    def fake_compose(pack, *, question, **kw):
+        seen["q"] = question
+        return ComposeResult(text="x", outcome="pass")
+    monkeypatch.setattr(call, "compose", fake_compose)
+    r = offline.post("/script/objection", data={"csrf": "token", "navy": "1", "comp": "2",
+                                                 "objection": "  they said it sounds complicated  "})
+    assert r.status_code == 200 and seen["q"] == "they said it sounds complicated"
+
+
+def test_an_objection_is_capped_in_length(offline, monkeypatch):
+    import app.call as call
+    from ai.compose import ComposeResult
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    seen = {}
+
+    def fake_compose(pack, *, question, **kw):
+        seen["q"] = question
+        return ComposeResult(text="x", outcome="pass")
+    monkeypatch.setattr(call, "compose", fake_compose)
+    long_text = "a" * 500
+    offline.post("/script/objection", data={"csrf": "token", "navy": "1", "comp": "2", "objection": long_text})
+    assert len(seen["q"]) == call.MAX_OBJECTION_CHARS

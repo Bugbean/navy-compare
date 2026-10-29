@@ -112,6 +112,19 @@
         </div>
       {% endif %}
 
+      <div class="objections" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+        <h4>Handle pushback</h4>
+        <div class="objection-presets">
+          {% if 'price' in s.objections %}<button type="button" class="pill objection-preset" data-preset="price">“Theirs is cheaper”</button>{% endif %}
+          {% if 'losing' in s.objections %}<button type="button" class="pill objection-preset" data-preset="losing">“What am I losing?”</button>{% endif %}
+        </div>
+        <div class="objection-form">
+          <input type="text" class="objection-input" maxlength="300" placeholder="Or type what they actually said…">
+          <button type="button" class="pill objection-ask">Ask</button>
+        </div>
+        <div class="objection-log"></div>
+      </div>
+
       <div class="two-col">
         <div class="col-better">
           <h4>Where Navy Health is better <span class="count">{{ c.stronger | length }}</span></h4>

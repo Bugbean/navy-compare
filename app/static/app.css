@@ -247,6 +247,20 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .talk-actions[hidden] { display: none; }
 .talk-actions .pill { margin: 0; }
 
+/* Ready replies to what the member actually says mid-call, not just an opening line. */
+.objections { margin: .2rem 0 1rem; padding: .7rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.objections h4 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .5rem; }
+.objection-presets { margin-bottom: .5rem; }
+.objection-form { display: flex; gap: .5rem; margin-bottom: .2rem; }
+.objection-input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); font-size: .88rem; }
+.objection-input:focus { outline: none; border-color: var(--accent); }
+.objection-log { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+.objection-entry { padding: .6rem .8rem; border-left: 3px solid var(--accent); background: var(--tint-accent-lo); border-radius: 4px; }
+.objection-said { font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+.objection-reply { font-size: .95rem; line-height: 1.5; }
+.objection-reply.draft { color: var(--muted); font-style: italic; }
+.objection-note { margin-top: .3rem; }
+
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 .col-better h4, .col-watch h4 { font-size: .85rem; margin-bottom: .4rem; }

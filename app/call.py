@@ -10,6 +10,8 @@
     GET  /card             the comparison (an HTML fragment)
     POST /script           a talking point for one card (JSON)
     POST /script/stream    the same, streamed as it is written, then replaced by the checked text (SSE)
+    POST /script/objection          a reply to one thing the member said, from the same card facts (JSON)
+    POST /script/objection/stream   the same, streamed
 
 Most of what a rep types is recognised in the browser in milliseconds (static/call.js, against the
 index). The model runs alongside for what is left, and never overrides what the rep has confirmed.
@@ -49,8 +51,25 @@ from engine import suggest
 from engine.db import EngineError, Snapshot
 
 bp = Blueprint("call", __name__)
-WRITER_PROMPT = Path(__file__).resolve().parent.parent / "ai" / "prompts" / "writer_v1.md"
+PROMPT_DIR = Path(__file__).resolve().parent.parent / "ai" / "prompts"
+WRITER_PROMPT = PROMPT_DIR / "writer_v1.md"
+OBJECTION_PROMPT = PROMPT_DIR / "objection_v1.md"
 log = logging.getLogger("app.call")
+
+# The two things a member pushes back with often enough to prepare for ahead of time, worded as what
+# the member said so the writer replies to it directly rather than restarting the pitch. "price" is
+# only ever offered when the competitor really is cheaper (engine/suggest.follow_ups already guards
+# this the same way); "losing" only when the card actually has something in the competitor's favour.
+OBJECTION_PRESETS = {
+    "price": "The member says the competitor's policy is cheaper. Acknowledge the premium gap honestly, "
+             "then answer why it may still be worth it: the strongest navy_better fact available, "
+             "ideally one scoped matches_what_member_cares_about, not just the price fact restated.",
+    "losing": "The member is worried about what they would lose by switching: what does their current "
+              "policy cover, or cover better, that Navy Health does not? Answer honestly from the facts "
+              "scoped comp_better - do not answer with what Navy Health covers instead; that is the "
+              "opposite of what was asked.",
+}
+MAX_OBJECTION_CHARS = 300
 
 MAX_POLICIES = 10
 MAX_CARDS = 6
@@ -328,8 +347,15 @@ def card():
         # has none to give — docs/DATA_MODEL.md); what actually applies if she needs treatment is the
         # excess, co-payment, known gap cover and the fund-wide waits, shown once alongside it.
         hospital = cl.hospital_context(c.navy_id, c.comp_id, vals) if focus_categories else []
+        # Only offer to prepare for an objection the card can actually speak to: "theirs is cheaper"
+        # only when it really is, "what am I losing" only when something is genuinely in their favour.
+        objections = []
+        if c.price and c.price.direction == df.COMP_BETTER:
+            objections.append("price")
+        if any(d.key != "price" for d in c.watch):
+            objections.append("losing")
         shown.append({"card": c, "verdict": suggest.verdict(c, nname, by_id[c.comp_id]["fund_name"]),
-                      "answers": answers, "claims": claim_blocks, "hospital": hospital})
+                      "answers": answers, "claims": claim_blocks, "hospital": hospital, "objections": objections})
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
     heads = []
@@ -369,7 +395,10 @@ def _talk_pack(sel: "Selection", navy_id: int, comp_id: int):
     return EvidencePack.of([Fact.model_validate(f) for f in rows], name="card"), None
 
 
-def _talk_request():
+def _prepared(question: str):
+    """sel, the two policy ids, the card's facts and the context the writer is given — shared by the
+    opening talking point (question="") and a reply to something the member said (question=<what they
+    said>). Both read from exactly the same facts; only what is asked of them differs."""
     _check_csrf()
     sel = _selection(request.form)
     if isinstance(sel, str):
@@ -386,7 +415,40 @@ def _talk_request():
         return None, (jsonify({"text": why, "outcome": "empty"}), 200)
     needs = [chip["label"] for chip in mat.chips() if chip["key"] in sel.chips]
     context = {"member_needs": needs, "household": sel.family, "state": sel.state}
-    return (sel, navy_id, comp_id, pack, context), None
+    return (sel, navy_id, comp_id, pack, context, question), None
+
+
+def _talk_request():
+    return _prepared("")
+
+
+def _objection_request():
+    _check_csrf()
+    preset = request.form.get("preset", "")
+    free = (request.form.get("objection") or "").strip()[:MAX_OBJECTION_CHARS]
+    question = OBJECTION_PRESETS.get(preset) or free
+    if not question:
+        return None, (jsonify({"error": "What did the member say?"}), 400)
+    return _prepared(question)
+
+
+def _compose_once(prepared, system_path: Path, kind: str):
+    sel, navy_id, comp_id, pack, context, question = prepared
+    accounting, refused = calls.begin(kind, {"navy": navy_id, "comp": comp_id, "facts": len(pack.facts)})
+    if refused:
+        return refused
+    try:
+        result = compose(pack, client=get_client(), system=system_path.read_text(encoding="utf-8"),
+                         question=question, context=context)
+    except Exception as exc:  # the card is still on screen; the rep loses only this one reply
+        log.exception("%s failed", kind)
+        calls.end(accounting, WRITER_MODEL, error=exc)
+        return jsonify({"error": "That isn't available right now; use the card."}), 502
+    calls.end(accounting, WRITER_MODEL, usage=result.usage, extra={"outcome": result.outcome})
+    payload = {"text": result.text, "outcome": result.outcome}
+    if question:
+        payload["question"] = question
+    return jsonify(payload)
 
 
 @bp.route("/script", methods=["POST"])
@@ -396,45 +458,40 @@ def script():
     prepared, early = _talk_request()
     if early:
         return early
-    sel, navy_id, comp_id, pack, context = prepared
-    accounting, refused = calls.begin("script", {"navy": navy_id, "comp": comp_id, "facts": len(pack.facts)})
-    if refused:
-        return refused
-    try:
-        result = compose(pack, client=get_client(), system=WRITER_PROMPT.read_text(encoding="utf-8"),
-                         question="", context=context)
-    except Exception as exc:  # the card is still on screen; the rep loses only the talking point
-        log.exception("talking point failed")
-        calls.end(accounting, WRITER_MODEL, error=exc)
-        return jsonify({"error": "The talking point isn't available right now; use the card."}), 502
-    calls.end(accounting, WRITER_MODEL, usage=result.usage, extra={"outcome": result.outcome})
-    return jsonify({"text": result.text, "outcome": result.outcome})
+    return _compose_once(prepared, WRITER_PROMPT, "script")
+
+
+@bp.route("/script/objection", methods=["POST"])
+def script_objection():
+    """A reply to one specific thing the member just said — a preset ("they say it's cheaper") or
+    whatever the rep types — from the same facts and the same checks as the talking point, aimed at
+    that one objection instead of an opening pitch."""
+    prepared, early = _objection_request()
+    if early:
+        return early
+    return _compose_once(prepared, OBJECTION_PROMPT, "objection")
 
 
 def _sse(event: dict) -> str:
     return "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
 
 
-@bp.route("/script/stream", methods=["POST"])
-def script_stream():
-    """The talking point as it is written. Each `preview` is unchecked prose and the page shows it as
-    such; the closing `done` event carries the checked text (or the facts, if the check failed), which
-    replaces it. A rep is never shown an unchecked sentence as if it were checked."""
-    prepared, early = _talk_request()
-    if early:
-        return early
-    sel, navy_id, comp_id, pack, context = prepared
-    accounting, refused = calls.begin("script", {"navy": navy_id, "comp": comp_id, "facts": len(pack.facts),
-                                                 "stream": True})
+def _compose_stream(prepared, system_path: Path, kind: str):
+    """Streamed version of `_compose_once`: each `preview` is unchecked prose shown as such; the closing
+    `done` event carries the checked text (or the facts, if the check failed), which replaces it. A rep
+    is never shown an unchecked sentence as if it were checked."""
+    sel, navy_id, comp_id, pack, context, question = prepared
+    accounting, refused = calls.begin(kind, {"navy": navy_id, "comp": comp_id, "facts": len(pack.facts),
+                                             "stream": True})
     if refused:
         return refused
     events: "queue.Queue[dict]" = queue.Queue()
-    system = WRITER_PROMPT.read_text(encoding="utf-8")
+    system = system_path.read_text(encoding="utf-8")
     client = get_client()
 
     def write() -> None:
         try:
-            result = compose(pack, client=client, system=system, question="", context=context,
+            result = compose(pack, client=client, system=system, question=question, context=context,
                              on_event=events.put)
             events.put({"type": "_done", "result": result})
         except Exception as exc:  # reported to the page as an error event below
@@ -447,22 +504,43 @@ def script_stream():
             try:
                 ev = events.get(timeout=45)
             except queue.Empty:
-                calls.end(accounting, WRITER_MODEL, error=TimeoutError("talking point timed out"))
-                yield _sse({"type": "error", "error": "The talking point took too long; use the card."})
+                calls.end(accounting, WRITER_MODEL, error=TimeoutError(f"{kind} timed out"))
+                yield _sse({"type": "error", "error": "That took too long; use the card."})
                 return
-            kind = ev.get("type")
-            if kind == "answer_preview":
+            ev_kind = ev.get("type")
+            if ev_kind == "answer_preview":
                 yield _sse({"type": "preview", "text": ev.get("text", "")})
-            elif kind == "_done":
+            elif ev_kind == "_done":
                 result = ev["result"]
                 calls.end(accounting, WRITER_MODEL, usage=result.usage, extra={"outcome": result.outcome})
-                yield _sse({"type": "done", "text": result.text, "outcome": result.outcome})
+                payload = {"type": "done", "text": result.text, "outcome": result.outcome}
+                if question:
+                    payload["question"] = question
+                yield _sse(payload)
                 return
-            elif kind == "_error":
-                log.error("talking point failed", exc_info=ev["error"])
+            elif ev_kind == "_error":
+                log.error("%s failed", kind, exc_info=ev["error"])
                 calls.end(accounting, WRITER_MODEL, error=ev["error"])
-                yield _sse({"type": "error", "error": "The talking point isn't available right now; use the card."})
+                yield _sse({"type": "error", "error": "That isn't available right now; use the card."})
                 return
 
     return Response(stream_with_context(stream()), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@bp.route("/script/stream", methods=["POST"])
+def script_stream():
+    """The talking point as it is written, streamed."""
+    prepared, early = _talk_request()
+    if early:
+        return early
+    return _compose_stream(prepared, WRITER_PROMPT, "script")
+
+
+@bp.route("/script/objection/stream", methods=["POST"])
+def script_objection_stream():
+    """A reply to what the member said, streamed."""
+    prepared, early = _objection_request()
+    if early:
+        return early
+    return _compose_stream(prepared, OBJECTION_PROMPT, "objection")

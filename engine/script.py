@@ -2,9 +2,12 @@
 
 The writer (ai/compose.py, prompt ai/prompts/writer_v1.md) may only use these facts, and the verifier
 checks every figure and name it writes against them. Each fact holds both sides, `value.navy` and
-`value.comp`, so a Navy Health figure can never be stated as the competitor's. Only what the card shows
-goes in: the premium line, the top five Navy Health strengths, the top three for the competitor, and the
-excess when it differs.
+`value.comp`, so a Navy Health figure can never be stated as the competitor's. What goes in: the premium
+line, the top five Navy Health strengths, the top three for the competitor, the excess when it differs,
+and anything beyond that which matches what the member said they care about (`chip_match`, set by the
+card from the rep's active chips) — a fact can matter to this one call without being the single highest
+scoring difference in general, and the writer is told which facts that is true for (`scope`) so it can
+lead with relevance to the actual person on the phone, not materiality alone.
 """
 from __future__ import annotations
 
@@ -45,20 +48,45 @@ def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int
                 f"{d.comp.display if d.comp else 'n/a'}{' ' + d.comp.note if d.comp and d.comp.note else ''}",
         "names": [navy_name, comp_name, d.label, "Navy Health"],
         "occurrences": None,
-        "scope": {"state": state, "family_type": family, "direction": d.direction},
+        "scope": {"state": state, "family_type": family, "direction": d.direction,
+                  **({"matches_what_member_cares_about": True} if d.chip_match else {})},
         "claimable": claimable,
         "evidence_rows": [], "source": {"table": "comparison card", "snapshot_id": snapshot},
         "coverage": {"requested": d.key, "complete_for_claim": True, "reason": None},
     }
 
 
+MAX_NEED_MATCHED_EXTRA = 4
+
+
 def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: str, family: str) -> list[dict]:
-    """The card's facts, in the order the writer should use them: the price, Navy Health's strengths,
-    then where the competitor is better, then the excess trade-off."""
+    """The card's facts: the price, Navy Health's top strengths, the competitor's top strengths, the
+    excess trade-off, and — beyond the usual cutoff — anything that matches what the member said they
+    care about, so that fact reaches the writer even when it is not the single highest-scoring one.
+    With no chips active this is exactly the old top-5/top-3/excess selection; chips only ever add."""
     chosen: list[Difference] = []
+    seen: set[str] = set()
+
+    def take(d: Difference) -> None:
+        if d.key not in seen:
+            seen.add(d.key)
+            chosen.append(d)
+
     if card.price and card.price.navy and card.price.comp:
-        chosen.append(card.price)
-    chosen += [d for d in card.stronger[:5] if d.key != "price"]
-    chosen += [d for d in card.watch[:3] if d.key != "price"]
-    chosen += [d for d in card.trade_offs if d.key == "excess"][:1]
+        take(card.price)
+    for d in card.stronger[:5]:
+        if d.key != "price":
+            take(d)
+    for d in card.watch[:3]:
+        if d.key != "price":
+            take(d)
+    extra = 0
+    for d in card.stronger + card.watch:
+        if d.chip_match and d.key not in seen and extra < MAX_NEED_MATCHED_EXTRA:
+            take(d)
+            extra += 1
+    for d in card.trade_offs:
+        if d.key == "excess":
+            take(d)
+            break
     return [_fact(f"F{i + 1}", d, navy_name, comp_name, snapshot, state, family) for i, d in enumerate(chosen)]
