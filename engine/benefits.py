@@ -51,6 +51,7 @@ class Value:
     size: Optional[float] = None   # the quantity a difference is measured in (dollars, months, steps)
     basis: str = ""            # ranks only compare within one basis
     note: str = ""             # what the rep must know beside the figure (the excess a premium is at)
+    wait: Optional[float] = None   # an extras service's waiting period in months, when it has one
 
 
 _FETCH = """
@@ -239,7 +240,8 @@ def values(data: dict, *, excess: Optional[float] = None,
                 text = "Not covered" if not e["covered"] else (
                     "Covered" if not wait else f"Covered, {wait} month wait")
                 vals[f"extras:{e['service']}"] = Value(f"extras:{e['service']}", "extras_service", text,
-                                                       1.0 if e["covered"] else 0.0, None)
+                                                       1.0 if e["covered"] else 0.0, None,
+                                                       wait=float(wait) if e["covered"] and wait else None)
 
         if covered:
             mine = [b for b in data["benefits"] if b["policy_id"] == pid]

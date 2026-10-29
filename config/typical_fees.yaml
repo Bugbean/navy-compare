@@ -1,0 +1,63 @@
+# Typical fee per extras item (AUD), used by engine/estimate.py ONLY where a policy pays a percentage
+# of the fee ("70% back") instead of a fixed dollar benefit, and to cap a fixed benefit at what a
+# visit realistically costs. Every estimate shows these as assumptions and the rep can change each one.
+#
+# Researched October 2026. Confidence varies — please have Navy Health confirm before relying on them:
+#   strongest  dental 012/114/121/417/615/881 (ADA 2022 survey via CHOICE; WorkSafe Vic 1 Jul 2026
+#              schedule), orthotics, physio, podiatry, osteopathy
+#   moderate   consumer price ranges or single clinics: chiro, acupuncture, Chinese herbal, massage,
+#              exercise physiology, speech, antenatal, home nursing, hearing aid, psychology, vaccinations
+#   weak       dietetics, orthoptics, multifocal lenses, extraction (322)
+#   estimate   no source found ("ESTIMATE" in source): audiology follow-up, glucose monitor, health
+#              management, non-PBS script, OT follow-up, single-vision lenses
+# Government schedules (DVA, TAC, Bupa ADF) usually sit below private fees, so items leaning on them
+# may understate what a member actually pays.
+
+AcupunctureInitial: {fee: 125, source: "Midpoint of consumer range $100-150; 2019 practitioner survey median initial $101-110 (via Dantian Health)", url: "https://dantianhealth.com.au/cost-acupuncture"}
+AcupunctureSubsequent: {fee: 90, source: "2019 practitioner survey median follow-up $81-90; consumer range $70-110 (via Dantian Health)", url: "https://dantianhealth.com.au/cost-acupuncture"}
+AntenatalPostnatalInitial: {fee: 175, source: "Private midwife price list (ACT): initial antenatal visit $175; single clinic, undated", url: "https://caremidwifery.com.au/?p=53"}
+AntenatalPostnatalSubsequent: {fee: 105, source: "Same private midwife price list: short antenatal visit $105; single clinic, undated", url: "https://caremidwifery.com.au/?p=53"}
+AudiologyInitial: {fee: 200, source: "TAC Vic 2025/26 audiology consult cap $190.83; directory range $200-300", url: "https://www.tac.vic.gov.au/clients/how-we-can-help/treatments-and-services/payment-rates/fee-schedule/audiology-services"}
+AudiologySubsequent: {fee: 120, source: "ESTIMATE - review appointment assumed at about 60% of initial", url: ""}
+BloodGlucoseMonitor: {fee: 80, source: "ESTIMATE - standard meter; many are free via NDSS, a CGM costs far more", url: ""}
+ChineseHerbalMedicineInitial: {fee: 110, source: "Dantian Health: initial herbal consult $110, herbs extra; 2019 survey median initial $101-110", url: "https://dantianhealth.com.au/pricing/"}
+ChineseHerbalMedicineSubsequent: {fee: 85, source: "2019 survey median follow-up $81-90 (via Dantian Health)", url: "https://dantianhealth.com.au/cost-acupuncture"}
+ChiropracticInitial: {fee: 110, source: "Bupa ADF schedule 1 Jul 2025 initial $93-112 by state; consumer range $70-150", url: "https://www.bupa.com.au/-/media/dotcom/files/adf/2025-2026/adf-provider_schedule-of-fees_chiropractor_07-2025.pdf"}
+ChiropracticSubsequent: {fee: 75, source: "DVA 2026 subsequent $77.05; consumer range $60-85", url: "https://www.dva.gov.au/sites/default/files/2026-07/2026-Chiropractors.pdf"}
+DentalGeneral012PeriodicExam: {fee: 62, source: "WorkSafe Vic dental schedule 1 Jul 2026 item 012 $61.52; ADA 2022 survey average $60 (via CHOICE)", url: "https://www.worksafe.vic.gov.au/dental-services-fee-schedule"}
+DentalGeneral114ScaleClean: {fee: 123, source: "ADA 2022 Dental Fees Survey average $123 (via CHOICE); WorkSafe Vic 2026 $110.97", url: "https://www.choice.com.au/health-and-body/dentists-and-dental-care/dental-treatment/articles/dental-fees"}
+DentalGeneral121Fluoride: {fee: 36, source: "ADA 2022 Dental Fees Survey average $36 (via CHOICE)", url: "https://www.choice.com.au/health-and-body/dentists-and-dental-care/dental-treatment/articles/dental-fees"}
+DentalGeneral322Extraction: {fee: 300, source: "Weak - midpoint of NSW OHFFSS $233.65 and TAC Vic 2025/26 $363.70; no ADA figure found", url: "https://www.health.nsw.gov.au/oralhealth/Pages/ohffss-schedule-of-fees.aspx"}
+DentalMajor322Extraction: {fee: 300, source: "Weak - same item 322 midpoint as above", url: "https://www.health.nsw.gov.au/oralhealth/Pages/ohffss-schedule-of-fees.aspx"}
+DentalMajor615FullCrownVeneered: {fee: 1690, source: "WorkSafe Vic dental schedule 1 Jul 2026 item 615 $1,690.86; ADA 2022 average $1,678 (via CHOICE)", url: "https://www.worksafe.vic.gov.au/dental-services-fee-schedule"}
+DieteticsInitial: {fee: 150, source: "Weak - between DVA 2026 initial $107.50 and private range $150-220", url: "https://wildphysiofitness.au/blogs/physiotherapy/dietitian-cost-sydney"}
+DieteticsSubsequent: {fee: 95, source: "Weak - between DVA 2026 subsequent $77.05 and private range $90-150", url: "https://wildphysiofitness.au/blogs/physiotherapy/dietitian-cost-sydney"}
+Endodontic417RootCanalTherapy: {fee: 300, source: "WorkSafe Vic dental schedule 1 Jul 2026 item 417 $298.68", url: "https://www.worksafe.vic.gov.au/dental-services-fee-schedule"}
+ExercisePhysiologyInitial: {fee: 135, source: "Directory estimate A$109-160; NSW icare 2024 cap $136.30", url: "https://www.doctify.com/au/find/exercise-advice/australia/specialists"}
+ExercisePhysiologySubsequent: {fee: 105, source: "Directory estimate A$95-120; NSW icare 2024 cap $92.40", url: "https://www.doctify.com/au/find/exercise-advice/australia/specialists"}
+HealthManagement: {fee: 300, source: "ESTIMATE - one fund-approved program fee; varies widely", url: ""}
+HearingAid: {fee: 3250, source: "About $6,500 a pair for clinic-prescribed aids (Soundly), halved for one aid", url: "https://www.soundly.com/blog/hearing-aids-cost"}
+HomeNursingInitial: {fee: 170, source: "Nurse Next Door private RN weekday rate $170/hour (July 2025)", url: "https://www.nursenextdoor.com.au/wp-content/uploads/2025/01/Nursing-Rates.pdf"}
+HomeNursingSubsequent: {fee: 120, source: "Support at Home provider RN rates (Nov 2025), 30-min visit lower end", url: "https://www.myagedcare.gov.au/sites/default/files/attachments/24/2-22YFN3M4.pdf"}
+NonPBSPrescription: {fee: 50, source: "ESTIMATE - private script prices vary widely by drug", url: ""}
+OccupationalTherapyInitial: {fee: 194, source: "NDIS OT hourly price limit $193.99; OT Australia 2025 survey says private fees roughly match", url: "https://otaus.com.au/news/otas-survey-of-ots-shows-dire-consequences-of-ndis-pricing-decision"}
+OccupationalTherapySubsequent: {fee: 160, source: "ESTIMATE - about 50 min at the NDIS hourly rate", url: ""}
+OpticalMultiFocalLenses: {fee: 600, source: "Weak - CHOICE: multifocal glasses from $500 or more; retail $169-549", url: "https://www.choice.com.au/health-and-body/optical-and-hearing/optical/buying-guides/prescription-glasses"}
+OpticalSingleVisionLenses: {fee: 250, source: "ESTIMATE - mid-market pair; retail from $169 (Oscar Wylee, June 2025)", url: "https://www.oscarwylee.com.au/price-guide/"}
+Orthodontic881BracesUpperLowerPlusRetainer: {fee: 7500, source: "WorkSafe Vic dental schedule 1 Jul 2026 item 881 specialist $7,465.70", url: "https://www.worksafe.vic.gov.au/dental-services-fee-schedule"}
+OrthopticsInitial: {fee: 160, source: "Weak - between DVA 2026 $141.75 and WA listing $160-200", url: "https://www.dva.gov.au/sites/default/files/2026-07/2026-Orthoptists.pdf"}
+OrthopticsSubsequent: {fee: 120, source: "Weak - WA listing $120-160; DVA 2026 $102.45", url: "https://carevo.com.au/services/orthoptics-home/o-connor"}
+Orthotics: {fee: 480, source: "Bupa ADF podiatry schedule 1 Jul 2026, custom orthosis $239.68 per foot x 2", url: "https://www.bupa.com.au/-/media/dotcom/files/adf/2026-2027/adf-provider_schedule-of-fees_podiatry_07-2026.pdf"}
+OsteopathyInitial: {fee: 135, source: "Clinic fees 2025 initial $130-150; QLD WorkSafe 2026 $137", url: "https://www.chadstoneregionosteo.com.au/osteo_fees/"}
+OsteopathySubsequent: {fee: 108, source: "Clinic fees 2025 standard $105-113", url: "https://www.chadstoneregionosteo.com.au/osteo_fees/"}
+PhysiotherapyInitial: {fee: 120, source: "Back In Motion (Nov 2025): initial $90-150, midpoint", url: "https://backinmotion.com.au/blog/article/how-much-does-physiotherapy-cost-in-australia"}
+PhysiotherapySubsequent: {fee: 95, source: "Back In Motion (Nov 2025): follow-up $70-120, midpoint", url: "https://backinmotion.com.au/blog/article/how-much-does-physiotherapy-cost-in-australia"}
+PodiatryInitial: {fee: 115, source: "Back In Motion (Feb 2026): initial $90-140, midpoint", url: "https://backinmotion.com.au/blog/article/how-much-does-podiatry-cost-in-australia"}
+PodiatrySubsequent: {fee: 85, source: "Back In Motion (Feb 2026): follow-up $70-100, midpoint", url: "https://backinmotion.com.au/blog/article/how-much-does-podiatry-cost-in-australia"}
+PsychologyInitial: {fee: 240, source: "About $240 typical session (Bark AU); APS suggested 2025-26 fee $318 is a ceiling", url: "https://www.bark.com/en/au/personal-growth-hub/therapy-cost/"}
+PsychologySubsequent: {fee: 240, source: "Same as initial - sessions are usually priced the same", url: "https://psychology.org.au/psychology/about-psychology/what-it-costs/private-practice-services"}
+RemedialMassageInitial: {fee: 110, source: "AU listings: 60-min remedial massage mostly $100-130", url: "https://fresha.com/lp/en/tt/remedial-massages/in/au-melbourne"}
+RemedialMassageSubsequent: {fee: 110, source: "Same as initial - massage is priced by length", url: "https://fresha.com/lp/en/tt/remedial-massages/in/au-melbourne"}
+SpeechTherapyInitial: {fee: 233, source: "MQ Health 2025: 60-min assessment with report $232.78", url: "https://www.mqhealth.org.au/__data/assets/pdf_file/0004/1378840/speech-pathology-fees.pdf"}
+SpeechTherapySubsequent: {fee: 145, source: "Private clinic 45-min session $145", url: "https://www.speechclinic.com.au/pricing/"}
+VaccinationsService: {fee: 85, source: "Medical centre price list: about $80 per travel vaccine; pharmacy $50-130", url: "https://medical-centre.qut.edu.au/home/featured/immunisations"}

@@ -2,6 +2,7 @@
 {% block title %}Compare — Navy Health Policy Compare{% endblock %}
 {% block content %}
 <div class="call-screen" data-csrf="{{ csrf }}">
+  <script type="application/json" id="extras-items">{{ extras_items | tojson }}</script>
   <section id="result" class="result" aria-live="polite">
     <div class="empty-state">
       <p><strong>Type the competitor's policy the way the member says it.</strong> The company is enough to start.</p>

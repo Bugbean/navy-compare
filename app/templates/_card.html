@@ -1,20 +1,11 @@
-{# The answer to what the rep typed: answer first, then the card, then what to do next, then the table. #}
+{# The call sheet: the price gap first, then what each policy lets the member claim (extras) and covers
+   (hospital) beside the help panel — what to say, what they'd get back, and replies to pushback. #}
 {% macro side(v) -%}{% if v %}{{ v.display }}{% if v.note %} <span class="muted">{{ v.note }}</span>{% endif %}{% else %}<span class="muted">not part of this policy</span>{% endif %}{%- endmacro %}
-{# What a clinical category actually covers, so "Covered" is never shown as a bare, unexplained
-   badge. The Covered/Not covered values themselves already say which side has it — this only adds
-   what the category means, not a restatement of which policy does or doesn't have it. #}
+{# What a clinical category actually covers, so "Covered" is never shown as a bare, unexplained badge. #}
 {% macro cat_note(d) -%}
   {% if d.kind == 'cover_category' and d.key in cat_defs %}
     <p class="cat-def muted small">{{ cat_defs[d.key] }}</p>
   {% endif %}
-{%- endmacro %}
-{% macro diff_line(d, comp_fund=none) -%}
-  <li class="diff{% if d.chip_match %} need{% endif %}">
-    <span class="diff-label">{{ d.label }}{% if d.chip_match %} <span class="need-mark" title="Matches what the member cares about">need</span>{% endif %}</span>
-    <span class="diff-vals"><span class="v-navy">{{ side(d.navy) }}</span><span class="vs">vs</span><span class="v-comp">{{ side(d.comp) }}</span></span>
-    <span class="mat mat-{{ d.materiality }}" title="How much this matters: {{ d.materiality }} of 3"></span>
-    {{ cat_note(d) }}
-  </li>
 {%- endmacro %}
 {% macro qa_row(d, comp_fund, label_override=none) -%}
   <div class="qa {{ d.direction }}">
@@ -24,6 +15,16 @@
     <span class="qa-verdict">{% if d.direction == 'navy_better' %}Navy Health is better{% elif d.direction == 'comp_better' %}Theirs is better{% elif d.direction == 'same' %}The same{% elif d.direction == 'trade_off' %}A trade-off{% elif d.direction == 'missing' %}Only one has it{% else %}Different{% endif %}</span>
     {{ cat_note(d) }}
   </div>
+{%- endmacro %}
+{% macro xcell(cell) -%}
+  {% if cell.covered is none %}<span class="muted">No extras</span>
+  {% elif not cell.covered %}<span class="x-no">Not covered</span>
+  {% else %}
+    <span class="x-limit">{{ cell.limit }}</span>
+    {% if cell.shared %}<span class="x-sub">shared with {{ cell.shared }}</span>{% endif %}
+    {% if cell.items %}<span class="x-sub">{% for lbl, val in cell.items %}{{ lbl }} {{ val }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+    {% if cell.wait %}<span class="x-wait">{{ cell.wait }}</span>{% endif %}
+  {% endif %}
 {%- endmacro %}
 
 {% if error %}
@@ -38,118 +39,150 @@
     <p class="warn">There is no Navy Health policy with a rate for this household in {{ state }} to compare with. Name one in the bar to compare anyway.</p>
   {% endif %}
 
-  {% for s in shown %}{% set c = s.card %}
-    <section class="answer-card" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-      <header class="answer-head">
-        <div class="pair-names">
+  {% for s in shown %}{% set c = s.card %}{% set comp_fund = by_id[c.comp_id].fund_name %}
+    <section class="answer-card sheet" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+      <header class="sheet-head">
+        <div class="sheet-side navy">
+          <span class="who">Navy Health{% if loop.first and auto %} <span class="best-match" title="The Navy Health policy closest in cover to theirs">best match</span>{% endif %}</span>
           <span class="navy-name">{{ by_id[c.navy_id].name }}</span>
-          {% if loop.first and auto %}<span class="best-match" title="The Navy Health policy closest in cover to theirs">best match</span>{% endif %}
-          <span class="muted">vs</span>
-          <span class="comp-name">{{ by_id[c.comp_id].name }}</span> <span class="muted small">{{ by_id[c.comp_id].fund_name }}</span>
+          {% if c.price and c.price.navy %}<span class="sheet-price">{{ c.price.navy.display }}</span><span class="muted small">{{ c.price.navy.note }}</span>{% endif %}
         </div>
-        <p class="verdict">{{ s.verdict }}</p>
+        <div class="sheet-gap {{ s.price.cheaper if s.price else '' }}">
+          {% if s.price and s.price.cheaper != 'same' %}
+            <span class="gap-who">{{ 'Navy Health' if s.price.cheaper == 'navy_better' else 'Theirs' }} is cheaper by</span>
+            <span class="gap-year">${{ '{:,.2f}'.format(s.price.year) }} a year</span>
+            <span class="muted small">${{ '{:,.2f}'.format(s.price.month) }} a month · before the rebate</span>
+          {% elif s.price %}<span class="gap-who">Same premium</span>
+          {% else %}<span class="muted small">No price to compare</span>{% endif %}
+        </div>
+        <div class="sheet-side comp">
+          <span class="who">{{ comp_fund }}</span>
+          <span class="comp-name">{{ by_id[c.comp_id].name }}</span>
+          {% if c.price and c.price.comp %}<span class="sheet-price">{{ c.price.comp.display }}</span><span class="muted small">{{ c.price.comp.note }}</span>{% endif %}
+        </div>
       </header>
 
       {% if s.answers %}
         <div class="direct-answer">
-          {% for d in s.answers %}{{ qa_row(d, by_id[c.comp_id].fund_name) }}{% endfor %}
+          {% for d in s.answers %}{{ qa_row(d, comp_fund) }}{% endfor %}
         </div>
       {% endif %}
 
-      {% if s.claims %}
-        <div class="claims">
-          {% for blk in s.claims %}
-            <div class="claim-block">
-              <div class="claim-head">
-                <h4>{{ blk.label }}</h4>
-                {% if blk.coverage and blk.coverage.direction != 'same' %}
-                  <span class="claim-flag {{ blk.coverage.direction }}">{% if blk.coverage.direction == 'navy_better' %}Navy Health only{% elif blk.coverage.direction == 'comp_better' %}Theirs only{% elif blk.coverage.direction == 'missing' %}Only one covers it{% else %}Covered differently{% endif %}</span>
-                {% endif %}
-              </div>
-              {% for it in blk.items %}{{ qa_row(it, by_id[c.comp_id].fund_name) }}{% endfor %}
-              {% if blk.more %}<p class="muted small claim-more">+{{ blk.more }} more billed item{{ 's' if blk.more != 1 else '' }} under {{ blk.label | lower }}</p>{% endif %}
-              {% if blk.limit %}{{ qa_row(blk.limit, by_id[c.comp_id].fund_name, label_override='Annual limit') }}{% endif %}
+      <div class="sheet-grid">
+        <div class="sheet-main">
+          {% if s.extras %}
+            <div class="sheet-block extras-block">
+              <h3>Extras: what they can claim each year</h3>
+              <table class="xtable">
+                <thead><tr><th>Service</th><th class="navy-col">Navy Health</th><th>{{ comp_fund }}</th><th>Difference</th></tr></thead>
+                {% for r in s.extras %}
+                  <tbody class="xgroup{% if r.focus %} focus open{% endif %}{% if loop.index > extras_rows_shown and not r.focus %} x-more{% endif %}" data-service="{{ r.service }}"{% if loop.index > extras_rows_shown and not r.focus %} hidden{% endif %}>
+                    <tr class="xrow dir-{{ r.direction }}">
+                      <th scope="row"><button type="button" class="x-open" aria-expanded="{{ 'true' if r.focus else 'false' }}" title="Every item it pays on">{{ r.label }}</button></th>
+                      <td class="{{ 'x-best' if r.direction == 'navy_better' else '' }}" data-who="Navy Health">{{ xcell(r.navy) }}</td>
+                      <td class="{{ 'x-best' if r.direction == 'comp_better' else '' }}" data-who="{{ comp_fund }}">{{ xcell(r.comp) }}</td>
+                      <td class="x-gap">{{ r.gap }}</td>
+                    </tr>
+                    <tr class="xdetail"><td colspan="4">
+                      <table class="xitems">
+                        {% for d in r.items %}
+                          <tr class="{{ d.direction }}"><td>{{ d.label }}</td><td>{{ side(d.navy) }}</td><td>{{ side(d.comp) }}</td></tr>
+                        {% endfor %}
+                        {% if r.limit %}<tr class="{{ r.limit.direction }}"><td>Annual limit</td><td>{{ side(r.limit.navy) }}</td><td>{{ side(r.limit.comp) }}</td></tr>{% endif %}
+                        {% if not r.items and not r.limit %}<tr><td colspan="3" class="muted">No item benefits published for this service.</td></tr>{% endif %}
+                      </table>
+                    </td></tr>
+                  </tbody>
+                {% endfor %}
+              </table>
+              {% if s.extras | length > extras_rows_shown %}
+                <button type="button" class="link-btn x-show-all">Show all {{ s.extras | length }} services</button>
+              {% endif %}
+              {% if s.neither %}<p class="muted small x-neither">Neither covers: {{ s.neither | join(', ') }}.</p>{% endif %}
             </div>
-          {% endfor %}
-        </div>
-      {% endif %}
+          {% endif %}
 
-      {% if s.hospital %}
-        <div class="claim-block hospital-context">
-          <div class="claim-head">
-            <h4>What applies on admission</h4>
-            <span class="muted small">a hospital condition has no dollar benefit of its own — this is what the member actually pays and waits on</span>
+          {% if s.hospital %}{% set h = s.hospital %}
+            <div class="sheet-block hospital-block">
+              <h3>Hospital: what's covered</h3>
+              <div class="h-lists">
+                <div class="h-list navy_better">
+                  <h4>Navy Health covers, theirs doesn't <span class="count">{{ h.navy_only | length }}</span></h4>
+                  {% if h.navy_only %}<ul>{% for d in h.navy_only %}
+                    <li class="{{ 'focus' if d.key in focus_categories else '' }}"><details{% if d.key in focus_categories %} open{% endif %}><summary><strong>{{ d.label }}</strong> <span class="muted small">{{ d.navy.display | lower }} vs {{ d.comp.display | lower if d.comp else 'not listed' }}</span></summary>{{ cat_note(d) }}</details></li>
+                  {% endfor %}</ul>{% else %}<p class="muted small">Nothing.</p>{% endif %}
+                </div>
+                <div class="h-list comp_better">
+                  <h4>Theirs covers, Navy Health doesn't <span class="count">{{ h.comp_only | length }}</span></h4>
+                  {% if h.comp_only %}<ul>{% for d in h.comp_only %}
+                    <li class="{{ 'focus' if d.key in focus_categories else '' }}"><details{% if d.key in focus_categories %} open{% endif %}><summary><strong>{{ d.label }}</strong> <span class="muted small">{{ d.comp.display | lower }} vs {{ d.navy.display | lower if d.navy else 'not listed' }}</span></summary>{{ cat_note(d) }}</details></li>
+                  {% endfor %}</ul>{% else %}<p class="muted small">Nothing.</p>{% endif %}
+                </div>
+              </div>
+              {% if h.both %}<p class="muted small">Both cover the other {{ h.both }} conditions the same way.</p>{% endif %}
+              <table class="htable">
+                <thead><tr><th></th><th class="navy-col">Navy Health</th><th>{{ comp_fund }}</th></tr></thead>
+                <tbody>
+                  {% for d in h.essentials %}
+                    <tr class="{{ d.direction }}"><th scope="row">{{ d.label }}</th>
+                      <td class="{{ 'x-best' if d.direction == 'navy_better' else '' }}">{{ side(d.navy) }}</td>
+                      <td class="{{ 'x-best' if d.direction == 'comp_better' else '' }}">{{ side(d.comp) }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </div>
+
+        <aside class="sheet-assist">
+          {% if loop.first %}
+            <div class="talk assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+              <h4>What to say</h4>
+              <div class="talk-text"><p class="muted small talk-wait">Writing what to say…</p></div>
+              <div class="talk-actions" hidden>
+                <button type="button" class="pill talk-copy">Copy</button>
+                <button type="button" class="link-btn talk-again">Write it again</button>
+              </div>
+            </div>
+          {% else %}
+            <div class="talk assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}" data-lazy="1">
+              <h4>What to say</h4>
+              <button type="button" class="pill talk-go">Write it</button>
+              <div class="talk-text" hidden></div>
+              <div class="talk-actions" hidden>
+                <button type="button" class="pill talk-copy">Copy</button>
+                <button type="button" class="link-btn talk-again">Write it again</button>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if s.extras %}
+            <div class="estimator assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+              <h4>What would they get back?</h4>
+              <div class="est-ask">
+                <input type="text" class="est-text" maxlength="400" placeholder="How do they use extras? “check-ups for both of us, she wears glasses, weekly physio”">
+                <button type="button" class="pill est-read">Work it out</button>
+              </div>
+              <div class="est-quick"></div>
+              <div class="est-lines"></div>
+              <div class="est-result"></div>
+            </div>
+          {% endif %}
+
+          <div class="objections assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+            <h4>Handle pushback</h4>
+            <div class="objection-presets">
+              {% if 'price' in s.objections %}<button type="button" class="pill objection-preset" data-preset="price">“Theirs is cheaper”</button>{% endif %}
+              {% if 'losing' in s.objections %}<button type="button" class="pill objection-preset" data-preset="losing">“What am I losing?”</button>{% endif %}
+            </div>
+            <div class="objection-form">
+              <input type="text" class="objection-input" maxlength="300" placeholder="Or type what they actually said…">
+              <button type="button" class="pill objection-ask">Ask</button>
+            </div>
+            <div class="objection-log"></div>
           </div>
-          {% for d in s.hospital %}{{ qa_row(d, by_id[c.comp_id].fund_name) }}{% endfor %}
-        </div>
-      {% endif %}
-
-      {% if c.price and c.price.navy and c.price.comp %}
-        <p class="price-line">
-          <strong>{{ c.price.navy.display }}</strong> <span class="muted">{{ c.price.navy.note }}</span>
-          <span class="vs">vs</span>
-          <strong>{{ c.price.comp.display }}</strong> <span class="muted">{{ c.price.comp.note }}</span>
-          <span class="muted small">· before the government rebate</span>
-        </p>
-      {% endif %}
-
-      {% if loop.first %}
-        <div class="talk" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-          <div class="talk-text"><p class="muted small talk-wait">Writing what to say…</p></div>
-          <div class="talk-actions" hidden>
-            <button type="button" class="pill talk-copy">Copy</button>
-            <button type="button" class="link-btn talk-again">Write it again</button>
-          </div>
-        </div>
-      {% else %}
-        <div class="talk" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}" data-lazy="1">
-          <button type="button" class="pill talk-go">What to say</button>
-          <div class="talk-text" hidden></div>
-          <div class="talk-actions" hidden>
-            <button type="button" class="pill talk-copy">Copy</button>
-            <button type="button" class="link-btn talk-again">Write it again</button>
-          </div>
-        </div>
-      {% endif %}
-
-      <div class="objections" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-        <h4>Handle pushback</h4>
-        <div class="objection-presets">
-          {% if 'price' in s.objections %}<button type="button" class="pill objection-preset" data-preset="price">“Theirs is cheaper”</button>{% endif %}
-          {% if 'losing' in s.objections %}<button type="button" class="pill objection-preset" data-preset="losing">“What am I losing?”</button>{% endif %}
-        </div>
-        <div class="objection-form">
-          <input type="text" class="objection-input" maxlength="300" placeholder="Or type what they actually said…">
-          <button type="button" class="pill objection-ask">Ask</button>
-        </div>
-        <div class="objection-log"></div>
+        </aside>
       </div>
-
-      <div class="two-col">
-        <div class="col-better">
-          <h4>Where Navy Health is better <span class="count">{{ c.stronger | length }}</span></h4>
-          {% if c.stronger %}
-            <ul>{% for d in c.stronger[:5] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
-            {% if c.stronger | length > 5 %}
-              <details><summary>{{ c.stronger | length - 5 }} more</summary><ul>{% for d in c.stronger[5:] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul></details>
-            {% endif %}
-          {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
-        </div>
-        <div class="col-watch">
-          <h4>Where theirs is better <span class="count">{{ c.watch | length }}</span></h4>
-          {% if c.watch %}
-            <ul>{% for d in c.watch[:3] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
-            {% if c.watch | length > 3 %}
-              <details><summary>{{ c.watch | length - 3 }} more</summary><ul>{% for d in c.watch[3:] %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul></details>
-            {% endif %}
-          {% else %}<p class="muted">Nothing on the benefits compared.</p>{% endif %}
-        </div>
-      </div>
-      {% if c.trade_offs %}
-        <details class="tradeoffs"><summary>Different, not better or worse ({{ c.trade_offs | length }})</summary>
-          <ul>{% for d in c.trade_offs %}{{ diff_line(d, by_id[c.comp_id].fund_name) }}{% endfor %}</ul>
-        </details>
-      {% endif %}
     </section>
   {% endfor %}
 
@@ -163,7 +196,7 @@
 
   {% if rows %}
     <details class="matrix-wrap" id="matrix"{% if not shown or heads | length > 2 or show_all %} open{% endif %}>
-      <summary><strong>Side by side</strong> <span class="muted small">{{ heads | length }} policies · {{ rows | length }} benefits</span></summary>
+      <summary><strong>Every benefit, side by side</strong> <span class="muted small">{{ heads | length }} policies · {{ rows | length }} benefits</span></summary>
       <div class="matrix-tools">
         {% if not wanted %}
           <button type="button" class="link-btn" id="toggle-all" data-all="{{ '0' if show_all else '1' }}">

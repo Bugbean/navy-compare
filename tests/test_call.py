@@ -112,8 +112,9 @@ def test_the_card_for_a_real_pair_puts_decisive_cover_first(client):
     r = client.get("/card?ids=2789,115&state=NSW&family=couple")
     html = r.data.decode()
     assert r.status_code == 200
-    assert "Where Navy Health is better" in html and "Back, neck and spine" in html
+    assert "Navy Health covers, theirs doesn't" in html and "Back, neck and spine" in html
     assert "$278.08 a month" in html and "at $750 excess" in html
+    assert "a year" in html and 'class="sheet-gap' in html     # the price gap, said a year as well as a month
 
 
 @needs_db
@@ -123,7 +124,7 @@ def test_a_competitor_alone_is_compared_with_its_closest_navy_policy(client):
     html = client.get("/card?ids=115&state=NSW&family=couple").data.decode()
     meta = json.loads(re.search(r'<script type="application/json" id="card-meta">(.*?)</script>', html, re.S).group(1))
     assert meta["auto_navy"] and meta["auto_navy"]["id"] in meta["columns"]
-    assert "best match" in html and 'class="verdict"' in html
+    assert "best match" in html and 'class="sheet-gap' in html
     assert all(a["id"] != meta["auto_navy"]["id"] for a in meta["alternatives"])
 
 
@@ -258,20 +259,25 @@ def test_a_clinical_category_difference_shows_what_it_covers_not_a_restated_verd
     # Rendered directly against the template, with a hand-built difference, so this does not depend on
     # which two policies happen to differ on a category in whichever database is configured.
     import app.call as call
+    from engine import claims as cl
     from engine.benefits import Value
     from engine.differences import Card, compare_pair
     navy = Value("cover:BoneJointMuscle", "cover_category", "Covered", 2.0, 2.0)
     comp = Value("cover:BoneJointMuscle", "cover_category", "Not covered", 0.0, 0.0)
     d = compare_pair("cover:BoneJointMuscle", navy, comp)
     c = Card(navy_id=1, comp_id=2, stronger=[d], watch=[], trade_offs=[], same=[], missing=[], price=None)
+    hospital = cl.hospital_sheet(1, 2, {1: {d.key: navy}, 2: {d.key: comp}})
     with client.application.app_context():
         from flask import render_template
         html = render_template(
             "_card.html", error=None, heads=[], by_id={1: {"name": "Navy"}, 2: {"name": "Comp", "fund_name": "HCF"}},
-            shown=[{"card": c, "verdict": "x", "answers": [], "claims": [], "hospital": []}], rows=[],
+            shown=[{"card": c, "answers": [], "extras": [], "neither": [], "hospital": hospital, "price": None,
+                    "objections": []}], rows=[],
             state="NSW", family="couple", scope="", anchor=None, chips=set(), show_all=False, wanted=None,
             focus=[], snapshot=1, release_date="2026-01-01", missing_rates=[], chip_rows=set(),
-            excess_options=[], followups=[], auto=None, meta={}, comp_only=False, cat_defs=call.CAT_DEFS)
+            excess_options=[], followups=[], auto=None, meta={}, comp_only=False, cat_defs=call.CAT_DEFS,
+            focus_categories=set(), extras_rows_shown=call.EXTRAS_ROWS_SHOWN)
+    assert "Navy Health covers, theirs doesn't" in html and "Bone, joint and muscle" in html
     assert "Injuries and diseases of the musculoskeletal system" in html
     # The Covered/Not covered values already say which side has it; nothing should restate that as a
     # separate sentence ("Not covered with HCF: ...").
@@ -340,3 +346,86 @@ def test_an_objection_is_capped_in_length(offline, monkeypatch):
     long_text = "a" * 500
     offline.post("/script/objection", data={"csrf": "token", "navy": "1", "comp": "2", "objection": long_text})
     assert len(seen["q"]) == call.MAX_OBJECTION_CHARS
+
+
+def _estimate_data():
+    """What engine/benefits.fetch returns, for one Navy Health and one competitor extras policy."""
+    def rate(pid, premium):
+        return {"policy_id": pid, "excess_type": None, "excess": 0, "per_person": None, "per_policy": None,
+                "per_admission": None, "premium": premium, "copayment_type": None, "copay_shared": None,
+                "copay_private": None, "copay_day_surgery": None, "ambulance": "None"}
+
+    def limit(pid, per_person):
+        return {"policy_id": pid, "title": "physio", "no_limit": False, "per_person": per_person, "per_service": None,
+                "per_policy": None, "lifetime": None, "count": None, "count_years": None, "count_type": None,
+                "free_text": None, "services": ["Physiotherapy"]}
+    return {
+        "snapshot": 1, "release_date": "2026-10-01", "closest": [], "profiles": [], "cover": [],
+        "policies": [{"id": 1, "name": "Navy Extras", "product_type": "extras", "is_navy": True, "fund_code": "NHB",
+                      "fund_name": "Navy Health", "status": "confirmed"},
+                     {"id": 2, "name": "Their Extras", "product_type": "extras", "is_navy": False, "fund_code": "HCF",
+                      "fund_name": "HCF", "status": "confirmed"}],
+        "rates": [rate(1, 50.0), rate(2, 60.0)],
+        "extras": [{"policy_id": p, "service": "Physiotherapy", "covered": True, "wait_months": 2} for p in (1, 2)],
+        "benefits": [{"policy_id": 1, "service": "Physiotherapy", "item": "PhysiotherapySubsequent", "amount": 50, "pct": None},
+                     {"policy_id": 2, "service": "Physiotherapy", "item": "PhysiotherapySubsequent", "amount": 40, "pct": None}],
+        "limits": [limit(1, 800), limit(2, 300)],
+    }
+
+
+def test_the_estimate_prices_a_usage_profile_on_both_policies_with_premiums_beside_it(offline, monkeypatch):
+    import json
+
+    import app.call as call
+    monkeypatch.setattr(call.bn, "fetch", lambda db, **kw: _estimate_data())
+    uses = [{"item": "PhysiotherapySubsequent", "times": 10, "people": 1, "fee": 95}]
+    r = offline.post("/call/estimate", data={"csrf": "token", "navy": "1", "comp": "2", "state": "NSW",
+                                             "family": "couple", "uses": json.dumps(uses)})
+    d = r.get_json()
+    assert r.status_code == 200
+    assert d["navy"]["total"] == 500 and d["comp"]["total"] == 300       # 10 x $50; 10 x $40 capped at $300
+    assert d["navy"]["premium_year"] == 600 and d["comp"]["premium_year"] == 720
+    assert d["navy"]["fund"] == "Navy Health" and d["comp"]["fund"] == "HCF"
+    assert "annual limit" in d["comp"]["lines"][0]["note"] and "2 month wait" in d["navy"]["lines"][0]["note"]
+
+
+def test_the_estimate_rejects_a_usage_list_it_cannot_read(offline):
+    r = offline.post("/call/estimate", data={"csrf": "token", "navy": "1", "comp": "2", "uses": "{nope"})
+    assert r.status_code == 400
+
+
+def test_usage_is_read_by_the_model_into_lines_the_rep_can_edit(offline, monkeypatch):
+    import app.call as call
+    from ai.usage import UsageRead
+    from engine.estimate import Use
+    seen = {}
+
+    def fake_read(text, *, client, model, household):
+        seen["text"], seen["household"] = text, household
+        return UsageRead(uses=[Use("PhysiotherapySubsequent", 52, 1)], unclear=["a GP visit"])
+    monkeypatch.setattr(call, "read_usage", fake_read)
+    r = offline.post("/call/usage", data={"csrf": "token", "text": "weekly physio and a GP visit", "family": "couple"})
+    d = r.get_json()
+    assert r.status_code == 200
+    assert d["uses"] == [{"item": "PhysiotherapySubsequent", "times": 52, "people": 1}]
+    assert d["unclear"] == ["a GP visit"] and seen["household"] == "couple"
+
+
+def test_usage_needs_something_to_read_and_the_form_token(offline):
+    assert offline.post("/call/usage", data={"csrf": "token", "text": "  "}).status_code == 400
+    assert offline.post("/call/usage", data={"csrf": "token", "text": "x" * 401}).status_code == 400
+    assert offline.post("/call/usage", data={"csrf": "wrong", "text": "physio"}).status_code in (400, 403)
+
+
+@needs_db
+def test_the_estimate_works_on_a_real_pair(client):
+    import json
+    with client.session_transaction() as sess:
+        sess["csrf"] = "token"
+    uses = [{"item": "DentalGeneral012PeriodicExam", "times": 2, "people": 2},
+            {"item": "OpticalSingleVisionLenses", "times": 1, "people": 1}]
+    r = client.post("/call/estimate", data={"csrf": "token", "navy": "2789", "comp": "115", "state": "NSW",
+                                            "family": "couple", "uses": json.dumps(uses)})
+    d = r.get_json()
+    assert r.status_code == 200 and len(d["navy"]["lines"]) == 2
+    assert d["navy"]["total"] >= 0 and d["comp"]["total"] >= 0

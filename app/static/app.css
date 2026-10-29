@@ -111,7 +111,7 @@ tr:hover td { background: var(--row-hover); }
 kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px;
       border-radius: 4px; font: 600 .72rem/1.4 ui-monospace, Consolas, monospace; text-align: center; background: var(--surface); color: var(--text); }
 
-.call-screen { max-width: 1100px; margin: 0 auto; padding-bottom: var(--dock-h, 170px); }
+.call-screen { max-width: 1320px; margin: 0 auto; padding-bottom: calc(var(--dock-h, 170px) + 1rem); }
 .call-screen section { margin-bottom: 1.4rem; }
 
 /* The chat dock: like a messaging app, the typing bar stays fixed at the bottom of the viewport so a
@@ -120,7 +120,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
    that wraps to two lines changes how tall it is. */
 .chat-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg);
              border-top: 1px solid var(--border); box-shadow: 0 -6px 20px rgba(0,0,0,.08); }
-.chat-dock-inner { max-width: 1100px; margin: 0 auto; padding: .55rem 2rem calc(.6rem + env(safe-area-inset-bottom, 0px)); }
+.chat-dock-inner { max-width: 1320px; margin: 0 auto; padding: .55rem 2rem calc(.6rem + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 640px) { .chat-dock-inner { padding-left: 16px; padding-right: 16px; } }
 
 /* The bar: the one place the rep types. */
@@ -220,25 +220,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 @media (max-width: 760px) { .qa { grid-template-columns: 1fr 1fr; } .qa-label, .qa-verdict { grid-column: 1 / -1; } }
 .qa .cat-def { grid-column: 1 / -1; margin-top: 2px; }
 
-/* What a member can actually claim, by service: what it pays per item, what the year caps it at.
-   The same .qa row as the direct answer above, grouped under the service so a rep can read the
-   whole picture for "what about dental?" in one place instead of hunting the table for it. */
-.claims { display: flex; flex-direction: column; gap: .9rem; margin: .2rem 0 .9rem; }
-.claim-block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .7rem .8rem; }
-.claim-head { display: flex; align-items: baseline; gap: .5rem; margin-bottom: .45rem; flex-wrap: wrap; }
-.claim-head h4 { font-size: .92rem; }
-.claim-flag { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; border-radius: 999px; padding: 1px 8px; background: var(--bg); color: var(--muted); }
-.claim-flag.navy_better { background: var(--tint-good); color: var(--green); }
-.claim-flag.comp_better { background: var(--tint-bad); color: var(--neg-text); }
-.claim-block .qa { margin-bottom: 4px; }
-.claim-block .qa:last-child { margin-bottom: 0; }
-.claim-more { margin: 2px 0 4px; }
-.hospital-context { border-style: dashed; }
-.hospital-context .claim-head { flex-direction: column; align-items: flex-start; gap: .1rem; }
-.price-line { margin-bottom: .8rem; font-size: .95rem; }
-.price-line .vs { color: var(--muted); margin: 0 .3rem; }
-
-.talk { margin: .2rem 0 .9rem; }
+.talk { margin: 0; }
 .talk-text { padding: .7rem .9rem; border-left: 3px solid var(--accent); background: var(--tint-accent-lo); border-radius: 4px; }
 .talk-text[hidden] { display: none; }
 .talk-body { font-size: 1.02rem; line-height: 1.55; }
@@ -248,8 +230,6 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .talk-actions .pill { margin: 0; }
 
 /* Ready replies to what the member actually says mid-call, not just an opening line. */
-.objections { margin: .2rem 0 1rem; padding: .7rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
-.objections h4 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .5rem; }
 .objection-presets { margin-bottom: .5rem; }
 .objection-form { display: flex; gap: .5rem; margin-bottom: .2rem; }
 .objection-input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); font-size: .88rem; }
@@ -261,26 +241,139 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .objection-reply.draft { color: var(--muted); font-style: italic; }
 .objection-note { margin-top: .3rem; }
 
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
-.col-better h4, .col-watch h4 { font-size: .85rem; margin-bottom: .4rem; }
-.col-better h4 { color: var(--green); }
-.col-watch h4 { color: var(--neg-text); }
-.count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 999px; font-size: .75rem; padding: 0 6px; background: var(--bg); color: var(--text); }
-.answer-card ul { list-style: none; }
-.diff { display: grid; grid-template-columns: 1fr auto; gap: .1rem .6rem; padding: 6px 8px; border-left: 3px solid transparent; margin-bottom: 3px; border-radius: 3px; }
-.col-better .diff { background: var(--tint-good); border-left-color: var(--green); }
-.col-watch .diff { background: var(--tint-bad); border-left-color: var(--red); }
-.tradeoffs .diff { background: var(--bg); }
-.diff-label { font-weight: 600; }
-.diff-vals { grid-column: 1 / 2; font-size: .85rem; }
-.diff-vals .vs { color: var(--muted); margin: 0 .3rem; }
-.mat { grid-column: 2; grid-row: 1 / span 2; align-self: center; width: 10px; height: 10px; border-radius: 50%; }
-.diff .cat-def { grid-column: 1 / 2; margin-top: 2px; }
-.mat-3 { background: var(--text); } .mat-2 { background: var(--muted); } .mat-1 { background: var(--border); } .mat-0 { display: none; }
-.need-mark { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #fff; border-radius: 3px; padding: 0 4px; }
-.answer-card details { margin-top: .5rem; }
-.answer-card summary { cursor: pointer; color: var(--accent); font-size: .85rem; }
+/* The call sheet. The price gap across the top, then the comparison (left) beside the help panel (right):
+   everything a rep needs on a call on one screen, read top to bottom in the order a member asks. */
+.sheet { padding: 0; overflow: hidden; }
+.sheet-head { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; padding: .9rem 1.15rem;
+              border-bottom: 1px solid var(--border); background: var(--bg); }
+.sheet-side { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sheet-side.comp { text-align: right; align-items: flex-end; }
+.sheet-side .who { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.sheet-side .navy-name, .sheet-side .comp-name { font-size: 1rem; line-height: 1.3; }
+.sheet-price { font-size: 1.25rem; font-weight: 700; margin-top: 2px; }
+.sheet-gap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: .45rem 1rem; border-radius: 10px;
+             background: var(--surface); border: 1px solid var(--border); min-width: 13rem; }
+.sheet-gap.navy_better { background: var(--tint-good); border-color: var(--green); }
+.sheet-gap.comp_better { background: var(--tint-bad); border-color: var(--red); }
+.gap-who { font-size: .78rem; font-weight: 600; }
+.gap-year { font-size: 1.35rem; font-weight: 800; }
+.sheet-gap.navy_better .gap-year { color: var(--green); }
+.sheet-gap.comp_better .gap-year { color: var(--neg-text); }
+@media (max-width: 760px) {
+  .sheet-head { grid-template-columns: 1fr 1fr; }
+  .sheet-gap { grid-column: 1 / -1; grid-row: 2; }
+}
+.sheet > .direct-answer { padding: .7rem 1.15rem 0; margin: 0; }
+.sheet-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 1.1rem; padding: 1rem 1.15rem 1.15rem; align-items: start; }
+@media (max-width: 1050px) { .sheet-grid { grid-template-columns: minmax(0, 1fr); } }
+.sheet-main { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+.sheet-block h3 { font-size: .95rem; margin-bottom: .5rem; }
+.sheet-assist { display: flex; flex-direction: column; gap: .8rem; position: sticky; top: .8rem; }
+@media (max-width: 1050px) { .sheet-assist { position: static; } }
+.assist-block { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .7rem .8rem; }
+.assist-block h4 { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .45rem; }
+
+/* Extras: one row per service, the limit large, what a visit pays and the wait beneath it. */
+.xtable { width: 100%; border-collapse: collapse; font-size: .86rem; table-layout: fixed; }
+.xtable > thead th { text-transform: none; letter-spacing: 0; font-size: .75rem; padding: 6px 8px; white-space: normal; }
+.xtable > thead th:first-child { width: 22%; }
+.xtable > thead th:last-child { width: 20%; }
+.xtable th.navy-col { color: var(--accent); }
+.xrow > th, .xrow > td { padding: 7px 8px; vertical-align: top; border-bottom: 1px solid var(--border); white-space: normal; text-align: left; }
+.xtable tr:hover td { background: none; }
+.xrow td span { display: block; }
+.x-limit { font-weight: 700; }
+.x-sub { font-size: .76rem; color: var(--muted); }
+.x-wait { font-size: .74rem; color: #9a6a00; }
+@media (prefers-color-scheme: dark) { .x-wait { color: #e2b04a; } }
+.x-no { color: var(--muted); font-style: italic; }
+.xrow td.x-best { background: var(--tint-good); }
+.x-gap { font-size: .8rem; font-weight: 600; }
+.dir-navy_better .x-gap { color: var(--green); }
+.dir-comp_better .x-gap { color: var(--neg-text); }
+.dir-same .x-gap, .dir-different .x-gap, .dir-trade_off .x-gap { color: var(--muted); font-weight: 400; }
+.x-open { background: none; border: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-align: left; padding: 0; }
+.x-open::before { content: "▸ "; color: var(--muted); }
+.xgroup.open .x-open::before { content: "▾ "; }
+.x-open:hover { color: var(--accent); }
+.xgroup.focus .xrow > th { box-shadow: inset 3px 0 0 var(--accent); }
+.x-used { display: inline-block; margin-left: .35rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .04em;
+          background: var(--accent); color: #fff; border-radius: 3px; padding: 0 4px; font-weight: 700; vertical-align: middle; }
+@media (prefers-color-scheme: dark) { .x-used { color: #0f141b; } }
+.xdetail { display: none; }
+.xgroup.open .xdetail { display: table-row; }
+.xdetail > td { padding: 0 8px 8px; border-bottom: 1px solid var(--border); }
+.xitems { width: 100%; font-size: .8rem; background: var(--bg); border-radius: 6px; }
+.xitems td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: normal; }
+.xitems tr:last-child td { border-bottom: none; }
+.xitems tr.navy_better td:nth-child(2), .xitems tr.comp_better td:nth-child(3) { color: var(--green); font-weight: 600; }
+/* On a phone the four columns are too narrow to read: each service becomes a small card, the two
+   sides next to each other and the gap beneath. */
+@media (max-width: 640px) {
+  .xtable, .xtable > tbody { display: block; }
+  .xtable > thead { display: none; }
+  .xtable > tbody[hidden] { display: none; }
+  .xrow { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .xrow > th, .xrow > td { border-bottom: none; }
+  .xrow > th, .xrow > td.x-gap { grid-column: 1 / -1; }
+  .xrow > td.x-gap { padding-top: 0; }
+  .xrow > td[data-who]::before { content: attr(data-who); display: block; font-size: .66rem; text-transform: uppercase;
+                                 letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+  .xgroup.open .xdetail { display: block; }
+  .xdetail > td { display: block; }
+}
+.x-show-all { margin-top: .5rem; }
+.x-neither { margin-top: .4rem; }
+
+/* Hospital: what only one side covers, then what applies to every admission. */
+.h-lists { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: .5rem; }
+@media (max-width: 700px) { .h-lists { grid-template-columns: 1fr; } }
+.h-list { border-radius: 8px; padding: .55rem .7rem; background: var(--bg); border-left: 3px solid var(--border); }
+.h-list.navy_better { border-left-color: var(--green); }
+.h-list.comp_better { border-left-color: var(--red); }
+.h-list h4 { font-size: .82rem; margin-bottom: .35rem; }
+.h-list.navy_better h4 { color: var(--green); }
+.h-list.comp_better h4 { color: var(--neg-text); }
+.h-list ul { list-style: none; }
+.h-list li { padding: 3px 0; font-size: .85rem; }
+.h-list li.focus { box-shadow: inset 3px 0 0 var(--accent); padding-left: 6px; }
+.h-list summary { cursor: pointer; }
+.h-list .cat-def { margin: 2px 0 4px 1rem; }
+.count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 999px; font-size: .75rem; padding: 0 6px; background: var(--surface); color: var(--text); }
+.htable { margin-top: .6rem; font-size: .84rem; table-layout: fixed; }
+.htable th, .htable td { white-space: normal; padding: 5px 8px; text-transform: none; letter-spacing: 0; }
+.htable thead th { font-size: .75rem; }
+.htable tbody th { color: var(--text); font-weight: 600; font-size: .82rem; width: 30%; }
+.htable td.x-best { background: var(--tint-good); }
+.htable tr:hover td { background: none; }
+
+/* What they'd get back: the usage lines the rep can change, then the two totals. */
+.est-ask { display: flex; gap: .4rem; }
+.est-text { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-size: .86rem; }
+.est-text:focus { outline: none; border-color: var(--accent); }
+.est-ask .pill { margin: 0; white-space: nowrap; }
+.est-quick { margin-top: .45rem; }
+.est-quick .pill { font-size: .75rem; padding: 2px 9px; margin-bottom: .25rem; }
+.est-lines { display: flex; flex-direction: column; gap: 6px; margin-top: .45rem; }
+.est-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 1.3rem; gap: 3px 6px; align-items: center;
+            font-size: .74rem; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.est-line select { grid-column: 1 / 4; min-width: 0; width: 100%; padding: 3px 4px; font-size: .8rem; border-radius: 4px; }
+.est-line label { display: flex; align-items: center; gap: 3px; color: var(--muted); white-space: nowrap; }
+.est-line input { min-width: 0; width: 100%; padding: 2px 4px; font-size: .78rem; border-radius: 4px; }
+.est-line .x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; }
+.est-result { margin-top: .6rem; }
+.est-totals { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.est-total { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: .45rem .55rem; }
+.est-total.win { border-color: var(--green); background: var(--tint-good); }
+.est-total .who { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.est-total strong { font-size: 1.15rem; }
+.est-say { margin-top: .5rem; font-size: .92rem; line-height: 1.45; font-weight: 600; }
+.est-break { margin-top: .4rem; font-size: .76rem; }
+.est-break summary { cursor: pointer; color: var(--accent); }
+.est-break table { margin-top: .3rem; font-size: .74rem; }
+.est-break td, .est-break th { padding: 3px 4px; white-space: normal; text-transform: none; letter-spacing: 0; font-size: .74rem; }
+.est-break tr:hover td { background: none; }
+.est-note { margin-top: .35rem; }
 
 .followups { display: flex; flex-wrap: wrap; gap: .1rem; margin: 0 0 1rem; }
 .follow { background: var(--tint-accent-lo); border-color: var(--tint-accent-hi); }

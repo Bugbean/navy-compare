@@ -592,7 +592,7 @@
   $("#new-call").addEventListener("click", newCall);
   function newCall() {
     S.navy = []; S.comp = []; S.autoNavy = null; S.alternatives = []; S.cheaper = []; S.needs = new Set();
-    S.focus = []; S.excess = null; S.showAll = false; S.questions = [];
+    S.focus = []; S.excess = null; S.showAll = false; S.questions = []; usage = [];
     live = null; bar.value = ""; notice.hidden = true; kept = null;
     renderSentence();
     result.innerHTML = `<div class="empty-state"><p><strong>New call.</strong> Type the competitor's policy the way the member says it.</p></div>`;
@@ -709,6 +709,15 @@
       if (!box.dataset.lazy && committed) talk(box);
       else if (!box.dataset.lazy) $(".talk-text", box).innerHTML = `<p class="muted small">Press Enter to confirm, and I'll write what to say.</p>`;
     });
+    $$(".x-open", result).forEach((b) => b.addEventListener("click", () => {
+      const group = b.closest(".xgroup");
+      b.setAttribute("aria-expanded", String(group.classList.toggle("open")));
+    }));
+    $$(".x-show-all", result).forEach((b) => b.addEventListener("click", () => {
+      $$(".x-more", b.closest(".extras-block")).forEach((g) => { g.hidden = false; });
+      b.remove();
+    }));
+    $$(".estimator", result).forEach(wireEstimator);
     $$(".objections", result).forEach((box) => {
       const input = $(".objection-input", box), ask = $(".objection-ask", box);
       $$(".objection-preset", box).forEach((b) => b.addEventListener("click", () => askObjection(box, { preset: b.dataset.preset, label: b.textContent })));
@@ -846,6 +855,151 @@
     } catch (err) {
       show({ type: "error", error: err.message });
     }
+  }
+
+  // ── what they would get back ─────────────────────────────────────────────────
+  // One usage profile for the whole call (what this household claims in a year), priced against every
+  // card. The model only reads the rep's words into lines (/call/usage); every dollar is worked out on
+  // the server from the policies' own benefits and limits (/call/estimate). Every line stays editable.
+  const ITEMS = (() => { try { return JSON.parse($("#extras-items").textContent); } catch (e) { return []; } })();
+  const ITEM = new Map(ITEMS.map((i) => [i.item, i]));
+  const QUICK = [
+    ["Dental check-ups", [["DentalGeneral012PeriodicExam", 2], ["DentalGeneral114ScaleClean", 2]]],
+    ["Glasses", [["OpticalSingleVisionLenses", 1]]],
+    ["Physio course", [["PhysiotherapyInitial", 1], ["PhysiotherapySubsequent", 5]]],
+    ["Massage", [["RemedialMassageInitial", 1], ["RemedialMassageSubsequent", 5]]],
+    ["Chiro", [["ChiropracticInitial", 1], ["ChiropracticSubsequent", 5]]],
+    ["Psychology", [["PsychologyInitial", 1], ["PsychologySubsequent", 5]]],
+    ["Braces", [["Orthodontic881BracesUpperLowerPlusRetainer", 1]]],
+    ["Crown", [["DentalMajor615FullCrownVeneered", 1]]],
+  ];
+  let usage = [];                       // [{item, times, people, fee}]
+  const dollars = (v) => "$" + Math.round(v).toLocaleString("en-AU");
+  const newLine = (item, times, people) => ({ item, times, people: people || 1, fee: (ITEM.get(item) || {}).fee ?? null });
+
+  function wireEstimator(box) {
+    const quick = $(".est-quick", box), input = $(".est-text", box), read = $(".est-read", box);
+    quick.innerHTML = QUICK.map(([label], i) => `<button type="button" class="pill est-add" data-i="${i}">+ ${esc(label)}</button>`).join("");
+    $$(".est-add", quick).forEach((b) => b.addEventListener("click", () => {
+      QUICK[Number(b.dataset.i)][1].forEach(([item, times]) => usage.push(newLine(item, times, 1)));
+      refreshEstimators();
+    }));
+    const go = () => { const text = input.value.trim(); if (text) readUsage(box, text); };
+    read.addEventListener("click", go);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+    renderLines(box);
+    if (usage.length) estimateFor(box);
+  }
+  function refreshEstimators() {
+    $$(".estimator", result).forEach((box) => { renderLines(box); estimateSoon(box); });
+  }
+  function itemOptions(selected) {
+    let html = "", group = "";
+    ITEMS.forEach((i) => {
+      if (i.service !== group) { html += `${group ? "</optgroup>" : ""}<optgroup label="${esc(i.service)}">`; group = i.service; }
+      html += `<option value="${esc(i.item)}"${i.item === selected ? " selected" : ""}>${esc(i.label)}</option>`;
+    });
+    return html + "</optgroup>";
+  }
+  function renderLines(box) {
+    const el = $(".est-lines", box);
+    if (!usage.length) { el.innerHTML = ""; $(".est-result", box).innerHTML = ""; return; }
+    el.innerHTML = usage.map((u, i) => `<div class="est-line" data-i="${i}">
+          <select class="est-item" aria-label="Item">${itemOptions(u.item)}</select>
+          <button type="button" class="x" title="Remove">×</button>
+          <label>× a year <input type="number" class="est-times" min="1" max="52" value="${u.times}"></label>
+          <label>people <input type="number" class="est-people" min="1" max="8" value="${u.people}"></label>
+          <label title="Typical fee each time; change it if you know theirs">fee $<input type="number" class="est-fee" min="0" step="1" value="${u.fee ?? ""}"></label>
+        </div>`).join("");
+    $$(".est-line[data-i]", el).forEach((row) => {
+      const i = Number(row.dataset.i);
+      const changed = () => {
+        const item = $(".est-item", row).value;
+        if (item !== usage[i].item) { usage[i].item = item; usage[i].fee = (ITEM.get(item) || {}).fee ?? null; $(".est-fee", row).value = usage[i].fee ?? ""; }
+        usage[i].times = Math.max(1, Math.min(52, Number($(".est-times", row).value) || 1));
+        usage[i].people = Math.max(1, Math.min(8, Number($(".est-people", row).value) || 1));
+        const fee = $(".est-fee", row).value;
+        usage[i].fee = fee === "" ? null : Number(fee);
+        $$(".estimator", result).forEach((b) => { if (b !== box) renderLines(b); estimateSoon(b); });
+      };
+      $$("select, input", row).forEach((f) => f.addEventListener("change", changed));
+      $(".x", row).addEventListener("click", () => { usage.splice(i, 1); refreshEstimators(); });
+    });
+  }
+  async function readUsage(box, text) {
+    const out = $(".est-result", box);
+    out.innerHTML = `<p class="muted small">Reading that…</p>`;
+    const body = new FormData();
+    body.append("csrf", csrf); body.append("text", text); body.append("family", (live && live.family) || S.family);
+    try {
+      const r = await fetch("/call/usage", { method: "POST", body, credentials: "same-origin" });
+      const d = await r.json();
+      if (d.error) { out.innerHTML = `<p class="error">${esc(d.error)}</p>`; return; }
+      if (!d.uses.length) { out.innerHTML = `<p class="muted small">I couldn't find any extras in that. Try “check-ups for both, glasses, weekly physio”, or use the buttons.</p>`; return; }
+      usage = d.uses.map((u) => newLine(u.item, u.times, u.people));
+      $(".est-text", box).value = "";
+      refreshEstimators();
+      if (d.unclear && d.unclear.length) showNotice(`Left out, not an extras claim: ${d.unclear.join("; ")}.`);
+    } catch (err) {
+      out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    }
+  }
+  function estimateSoon(box) {
+    clearTimeout(box.estTimer);
+    box.estTimer = setTimeout(() => estimateFor(box), 250);
+  }
+  async function estimateFor(box) {
+    const out = $(".est-result", box), sheet = box.closest(".sheet");
+    $$(".xgroup", sheet).forEach((g) => { g.classList.remove("used"); const m = $(".x-used", g); if (m) m.remove(); });
+    if (!usage.length) { out.innerHTML = ""; return; }
+    const mine = box.estSeq = (box.estSeq || 0) + 1;
+    const body = new FormData();
+    body.append("csrf", csrf); body.append("navy", box.dataset.navy); body.append("comp", box.dataset.comp);
+    body.append("uses", JSON.stringify(usage));
+    cardParams().forEach((v, k) => { if (k !== "ids" && k !== "focus") body.append(k, v); });
+    try {
+      const r = await fetch("/call/estimate", { method: "POST", body, credentials: "same-origin" });
+      const d = await r.json();
+      if (mine !== box.estSeq) return;
+      if (d.error) { out.innerHTML = `<p class="error">${esc(d.error)}</p>`; return; }
+      out.innerHTML = estimateHtml(d);
+      new Set(usage.map((u) => (ITEM.get(u.item) || {}).svc)).forEach((svc) => {
+        const g = sheet && sheet.querySelector(`.xgroup[data-service="${svc}"]`);
+        if (g) { g.classList.add("used"); g.hidden = false; $(".x-open", g).insertAdjacentHTML("afterend", `<span class="x-used">in use</span>`); }
+      });
+    } catch (err) {
+      if (mine === box.estSeq) out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    }
+  }
+  function estimateHtml(d) {
+    const n = d.navy, c = d.comp;
+    // Rounded once, here, so the figures in the sentence always add up as said.
+    const back = Math.round(n.total) - Math.round(c.total);
+    const prem = n.premium_year != null && c.premium_year != null ? Math.round(c.premium_year - n.premium_year) : null;
+    let say = back === 0 ? "On how they use their extras, both pay back about the same"
+      : `On how they use their extras, ${back > 0 ? "Navy Health" : esc(c.fund)} pays back about ${dollars(Math.abs(back))} more a year`;
+    if (prem) say += back > 0 ? `, and costs ${dollars(Math.abs(prem))} a year ${prem > 0 ? "less" : "more"}`
+      : `, and Navy Health costs ${dollars(Math.abs(prem))} a year ${prem > 0 ? "less" : "more"}`;
+    say += ".";
+    if (prem != null && back + prem !== 0 && prem !== 0 && back !== 0) {
+      const net = back + prem;
+      say += ` Overall that's about ${dollars(Math.abs(net))} a year ${net > 0 ? "better off with Navy Health" : "better off with " + esc(c.fund)}.`;
+    }
+    const rows = n.lines.map((ln, i) => {
+      const cl = c.lines[i] || {};
+      const notes = [ln.note && `Navy: ${ln.note}`, cl.note && `Theirs: ${cl.note}`].filter(Boolean).join(" · ");
+      return `<tr><td>${esc(ln.service)}: ${esc(ln.label)} ×${ln.claims}${notes ? `<br><span class="muted">${esc(notes)}</span>` : ""}</td>
+        <td>${dollars(ln.paid)}</td><td>${dollars(cl.paid || 0)}</td></tr>`;
+    }).join("");
+    return `<div class="est-totals">
+        <div class="est-total${back > 0 ? " win" : ""}"><span class="who">Navy Health pays back</span><strong>${dollars(n.total)}</strong> <span class="muted small">a year</span></div>
+        <div class="est-total${back < 0 ? " win" : ""}"><span class="who">${esc(c.fund)} pays back</span><strong>${dollars(c.total)}</strong> <span class="muted small">a year</span></div>
+      </div>
+      <p class="est-say">${say}</p>
+      <details class="est-break"><summary>How that's worked out</summary>
+        <table><thead><tr><th></th><th>Navy</th><th>Theirs</th></tr></thead><tbody>${rows}</tbody></table>
+      </details>
+      <p class="muted small est-note">An estimate from each policy's published benefits and annual limits. Where a policy pays a percentage, it's of the typical fee shown. Waiting periods aren't applied. Premiums before the rebate.</p>`;
   }
 
   // ── the model, for what was not recognised ───────────────────────────────────

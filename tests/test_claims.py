@@ -1,7 +1,9 @@
-"""The claim detail a rep can read aloud for one extras service (engine/claims.py): what it pays per
-item and the annual cap, grouped the way a sales conversation goes rather than flat and ranked."""
+"""The call sheet (engine/claims.py): every extras service with its limit, what a visit pays and the gap
+said in dollars, in the order members claim; the hospital conditions only one side covers; the price
+gap a month and a year."""
 from engine import claims as cl
 from engine.benefits import Value
+from engine.differences import compare_pair
 
 
 def test_services_in_finds_the_service_behind_extras_limit_and_item_keys():
@@ -38,42 +40,76 @@ def _vals():
     return {1: navy, 2: comp}
 
 
-def test_a_block_combines_coverage_items_and_the_limit_for_one_service():
-    blocks = cl.claim_groups(1, 2, _vals(), services=["DentalGeneral"])
-    assert len(blocks) == 1
-    b = blocks[0]
-    assert b.service == "DentalGeneral" and b.label == "General dental"
-    assert b.coverage.direction == "same"   # both covered, same wait
-    assert b.limit.direction == "same"
-    assert {i.key for i in b.items} == {
-        "item:DentalGeneral012PeriodicExam", "item:DentalGeneral114ScaleClean",
-        "item:DentalGeneral121Fluoride", "item:DentalGeneral322Extraction"}
+def _service(svc, *, covered=True, limit=None, wait=None, items=()):
+    """One policy's values for one extras service."""
+    out = {f"extras:{svc}": Value(f"extras:{svc}", "extras_service", "Covered" if covered else "Not covered",
+                                  1.0 if covered else 0.0, None, wait=wait)}
+    if limit is not None:
+        out[f"limit:{svc}"] = Value(f"limit:{svc}", "extras_limit", limit[0], limit[1], limit[1], limit[2])
+    for item, display, amount in items:
+        out[f"item:{item}"] = Value(f"item:{item}", "extras_item", display, amount, amount, "dollars")
+    return out
 
 
-def test_items_are_ranked_by_how_much_they_differ_not_alphabetically():
-    blocks = cl.claim_groups(1, 2, _vals(), services=["DentalGeneral"])
-    # The extraction (not covered vs $116) is the biggest, most material gap: it leads.
-    assert blocks[0].items[0].key == "item:DentalGeneral322Extraction"
-    assert blocks[0].items[0].direction == "comp_better"
+def test_a_row_shows_each_side_limit_items_and_wait_and_says_the_gap_in_dollars():
+    navy = _service("Physiotherapy", limit=("$800 a person a year", 800.0, "per_person"), wait=2.0,
+                    items=[("PhysiotherapyInitial", "$60", 60.0), ("PhysiotherapySubsequent", "$50", 50.0)])
+    comp = _service("Physiotherapy", limit=("$500 a person a year", 500.0, "per_person"),
+                    items=[("PhysiotherapyInitial", "$60", 60.0), ("PhysiotherapySubsequent", "$50", 50.0)])
+    rows, neither = cl.extras_sheet(1, 2, {1: navy, 2: comp})
+    assert neither == [] and len(rows) == 1
+    r = rows[0]
+    assert r.label == "Physiotherapy" and r.direction == "navy_better"
+    assert r.gap == "Navy Health: $300 more a year"
+    assert r.navy.limit == "$800 a person a year" and r.navy.wait == "2 month wait"
+    assert r.navy.items == [("first visit", "$60"), ("follow-up visit", "$50")]
+    assert r.comp.wait == ""
 
 
-def test_more_than_the_shown_cap_is_counted_not_dropped_silently(monkeypatch):
-    monkeypatch.setattr(cl, "MAX_ITEMS_SHOWN", 2)
-    blocks = cl.claim_groups(1, 2, _vals(), services=["DentalGeneral"])
-    assert len(blocks[0].items) == 2 and blocks[0].more == 2
+def test_a_shared_limit_is_split_out_so_the_rep_can_say_what_it_is_shared_with():
+    navy = _service("Orthotics", limit=("$300 a person a year (shared with Hearing aids, Glucose monitor)", 300.0, "per_person"))
+    rows, _ = cl.extras_sheet(1, 2, {1: navy, 2: _service("Orthotics", covered=False)})
+    assert rows[0].navy.limit == "$300 a person a year"
+    assert rows[0].navy.shared == "Hearing aids, Glucose monitor"
+    assert rows[0].comp.covered is False and rows[0].gap == "Navy Health only"
 
 
-def test_a_service_with_no_data_on_either_side_is_left_out():
-    blocks = cl.claim_groups(1, 2, _vals(), services=["DentalGeneral", "Physiotherapy"])
-    assert [b.service for b in blocks] == ["DentalGeneral"]
+def test_with_equal_limits_the_gap_comes_from_what_each_visit_pays():
+    rows, _ = cl.extras_sheet(1, 2, _vals())
+    assert rows[0].direction == "comp_better"
+    # The extraction (not covered vs $116) is the biggest item gap, and it is said in dollars.
+    assert rows[0].gap == "Theirs: $116 more per tooth extraction"
 
 
-def test_coverage_on_one_side_only_is_a_real_win_not_hidden_as_a_tie():
-    vals = _vals()
-    vals[2].pop("extras:DentalGeneral")
-    vals[1]["extras:DentalGeneral"] = Value("extras:DentalGeneral", "extras_service", "Covered", 1.0, None)
-    blocks = cl.claim_groups(1, 2, vals, services=["DentalGeneral"])
-    assert blocks[0].coverage.direction == "missing"
+def test_rows_follow_the_order_members_claim_with_what_the_rep_asked_about_first():
+    navy = {**_service("Psychology"), **_service("Optical"), **_service("DentalGeneral")}
+    comp = {**_service("Psychology"), **_service("Optical"), **_service("DentalGeneral")}
+    rows, _ = cl.extras_sheet(1, 2, {1: navy, 2: comp})
+    assert [r.service for r in rows] == ["DentalGeneral", "Optical", "Psychology"]
+    rows, _ = cl.extras_sheet(1, 2, {1: navy, 2: comp}, focus=["Psychology"])
+    assert [r.service for r in rows] == ["Psychology", "DentalGeneral", "Optical"]
+    assert rows[0].focus and not rows[1].focus
+
+
+def test_a_service_neither_covers_is_listed_once_not_given_a_row():
+    rows, neither = cl.extras_sheet(1, 2, {1: _service("HomeNursing", covered=False),
+                                           2: _service("HomeNursing", covered=False)})
+    assert rows == [] and neither == ["Home nursing"]
+
+
+def test_a_hospital_only_pair_has_no_extras_rows():
+    assert cl.extras_sheet(1, 2, {1: {}, 2: {}}) == ([], [])
+
+
+def test_the_service_order_lists_every_service_once():
+    from config.reference import EXTRAS_SERVICES
+    assert sorted(cl.SERVICE_ORDER) == sorted(EXTRAS_SERVICES)
+
+
+def test_short_item_labels_drop_the_service_name_and_item_number():
+    assert cl.short_item("PhysiotherapyInitial") == "first visit"
+    assert cl.short_item("DentalMajor615FullCrownVeneered") == "crown"
+    assert cl.short_item("Orthodontic881BracesUpperLowerPlusRetainer") == "braces, upper and lower, with retainer"
 
 
 def test_categories_in_finds_cover_keys_and_ignores_everything_else():
@@ -83,41 +119,50 @@ def test_categories_in_finds_cover_keys_and_ignores_everything_else():
 
 
 def _hospital_vals():
+    def cover(key, display, rank):
+        return Value(key, "cover_category", display, rank, rank)
     navy = {
-        "cover:BoneJointMuscle": Value("cover:BoneJointMuscle", "cover_category", "Covered", 2.0, 2.0),
+        "cover:BoneJointMuscle": cover("cover:BoneJointMuscle", "Covered", 2.0),
+        "cover:HeartVascular": cover("cover:HeartVascular", "Covered", 2.0),
+        "cover:Psychiatric": cover("cover:Psychiatric", "Restricted", 1.0),
         "excess": Value("excess", "excess", "$500", 500.0, 500.0),
-        "copayment": Value("copayment", "copayment", "None", 0.0, 0.0),
         "known_gap": Value("known_gap", "known_gap", "Yes", 1.0, None),
-        "wait:PreExisting": Value("wait:PreExisting", "wait_months", "12 months", -12.0, 12.0, "months"),
-        "wait:Other": Value("wait:Other", "wait_months", "2 months", -2.0, 2.0, "months"),
     }
     comp = {
-        "cover:BoneJointMuscle": Value("cover:BoneJointMuscle", "cover_category", "Not covered", 0.0, 0.0),
+        "cover:BoneJointMuscle": cover("cover:BoneJointMuscle", "Not covered", 0.0),
+        "cover:HeartVascular": cover("cover:HeartVascular", "Covered", 2.0),
+        "cover:Psychiatric": cover("cover:Psychiatric", "Covered", 2.0),
         "excess": Value("excess", "excess", "$750", 750.0, 750.0),
-        "copayment": Value("copayment", "copayment", "None", 0.0, 0.0),
         "known_gap": Value("known_gap", "known_gap", "No", 0.0, None),
-        "wait:PreExisting": Value("wait:PreExisting", "wait_months", "12 months", -12.0, 12.0, "months"),
-        "wait:Other": Value("wait:Other", "wait_months", "2 months", -2.0, 2.0, "months"),
     }
     return {1: navy, 2: comp}
 
 
-def test_hospital_context_covers_what_applies_on_admission_not_a_claim_amount():
-    out = cl.hospital_context(1, 2, _hospital_vals())
-    assert {d.key for d in out} == {"excess", "copayment", "known_gap", "wait:PreExisting", "wait:Other"}
-    excess = next(d for d in out if d.key == "excess")
-    assert excess.direction == "trade_off"   # excess is never scored as a plain win
-    gap = next(d for d in out if d.key == "known_gap")
-    assert gap.direction == "navy_better"
+def test_the_hospital_sheet_lists_what_only_one_side_covers_and_counts_the_rest():
+    h = cl.hospital_sheet(1, 2, _hospital_vals())
+    assert [d.key for d in h.navy_only] == ["cover:BoneJointMuscle"]
+    assert [d.key for d in h.comp_only] == ["cover:Psychiatric"]     # covered beats restricted
+    assert h.both == 1
+    keys = [d.key for d in h.essentials]
+    assert keys == ["excess", "known_gap"]
+    assert next(d for d in h.essentials if d.key == "excess").direction == "trade_off"
 
 
-def test_hospital_context_is_empty_when_neither_side_has_any_of_it():
-    assert cl.hospital_context(1, 2, {1: {}, 2: {}}) == []
+def test_an_extras_only_pair_has_no_hospital_sheet():
+    assert cl.hospital_sheet(1, 2, {1: _service("Optical"), 2: _service("Optical")}) is None
 
 
-def test_hospital_context_skips_a_key_only_if_both_sides_lack_it():
-    vals = _hospital_vals()
-    del vals[2]["known_gap"]
-    out = cl.hospital_context(1, 2, vals)
-    gap = next(d for d in out if d.key == "known_gap")
-    assert gap.direction == "missing"
+def _price(navy, comp):
+    n = Value("price", "premium", f"${navy} a month", -navy, navy, "dollars")
+    c = Value("price", "premium", f"${comp} a month", -comp, comp, "dollars")
+    return compare_pair("price", n, c)
+
+
+def test_the_price_gap_is_given_a_month_and_a_year():
+    g = cl.price_gap(_price(743.86, 843.60))
+    assert g.cheaper == "navy_better" and g.month == 99.74 and g.year == 1196.88
+    assert cl.price_gap(_price(300.0, 250.0)).cheaper == "comp_better"
+    assert cl.price_gap(_price(300.0, 300.0)).cheaper == "same"
+    assert cl.price_gap(None) is None
+
+

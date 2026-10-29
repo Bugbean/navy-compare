@@ -49,6 +49,27 @@ def test_a_need_matched_fact_already_in_the_top_cut_is_not_listed_twice():
     assert [r["metric"] for r in rows].count("s1") == 1
 
 
+def test_a_service_wait_is_a_field_the_writer_can_bind_not_just_words_in_the_text():
+    navy = Value("extras:Audiology", "extras_service", "Covered, 2 month wait", 1.0, None, wait=2.0)
+    comp = Value("extras:Audiology", "extras_service", "Not covered", 0.0, None)
+    d = Difference(key="extras:Audiology", label="Audiology", group="Extras services", kind="extras_service",
+                   navy=navy, comp=comp, direction="navy_better", materiality=2)
+    card = Card(navy_id=1, comp_id=2, stronger=[d], watch=[], trade_offs=[], same=[], missing=[], price=None)
+    row = facts(card, navy_name="Navy", comp_name="Comp", snapshot=1, state="NSW", family="couple")[0]
+    assert row["claimable"]["navy_wait_months"] == 2.0 and "comp_wait_months" not in row["claimable"]
+
+
+def test_an_everyday_service_gap_reaches_the_writer_even_below_the_cutoff():
+    stronger = [_d(f"s{i}") for i in range(7)]
+    dental = _d("limit:DentalGeneral", materiality=1)
+    rare = _d("extras:Orthoptics", materiality=1)
+    card = Card(navy_id=1, comp_id=2, stronger=stronger + [rare, dental], watch=[], trade_offs=[], same=[],
+                missing=[], price=None)
+    keys = [r["metric"] for r in facts(card, navy_name="Navy", comp_name="Comp", snapshot=1, state="NSW",
+                                       family="couple")]
+    assert "limit:DentalGeneral" in keys and "extras:Orthoptics" not in keys
+
+
 def test_need_matched_extras_are_capped():
     stronger = [_d(f"s{i}", chip_match=True) for i in range(MAX_NEED_MATCHED_EXTRA + 5)]
     card = Card(navy_id=1, comp_id=2, stronger=stronger, watch=[], trade_offs=[], same=[], missing=[], price=None)

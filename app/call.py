@@ -12,6 +12,9 @@
     POST /script/stream    the same, streamed as it is written, then replaced by the checked text (SSE)
     POST /script/objection          a reply to one thing the member said, from the same card facts (JSON)
     POST /script/objection/stream   the same, streamed
+    POST /call/estimate    what each policy of a card pays back in a year for a usage profile (JSON)
+    POST /call/usage       the rep's description of how the household uses extras, read into a usage
+                           profile the rep can edit (JSON)
 
 Most of what a rep types is recognised in the browser in milliseconds (static/call.js, against the
 index). The model runs alongside for what is left, and never overrides what the rep has confirmed.
@@ -36,14 +39,16 @@ from ai import calls
 from ai.client import ROUTER_MODEL, WRITER_MODEL, get_client
 from ai.compose import compose
 from ai.facts import EvidencePack, Fact
+from ai.usage import read_usage
 from app.auth.routes import _check_csrf, csrf_token
 from config import features as feats
 from config import language as lang
-from config.reference import DEPENDANT_TITLES, FAMILY_TYPES, STATES
+from config.reference import DEPENDANT_TITLES, EXTRAS_ITEMS, FAMILY_TYPES, STATES
 from engine import benefits as bn
 from engine import catalog as cat
 from engine import claims as cl
 from engine import differences as df
+from engine import estimate as est
 from engine import materiality as mat
 from engine import plan as planning
 from engine import script as talk
@@ -73,6 +78,8 @@ MAX_OBJECTION_CHARS = 300
 
 MAX_POLICIES = 10
 MAX_CARDS = 6
+EXTRAS_ROWS_SHOWN = 8   # the rest of the extras services are one click away
+MAX_USAGE_CHARS = 400
 MAX_REQUEST_CHARS = 500
 REAL_STATES = [s for s in STATES if s != "ALL"]
 TYPE_CODES = {"hospital": "h", "extras": "e", "combined": "c"}
@@ -90,7 +97,17 @@ def _warm_index() -> None:
 def call_screen():
     threading.Thread(target=_warm_index, daemon=True).start()
     return render_template("call.html", csrf=csrf_token(), states=REAL_STATES, families=FAMILY_TYPES,
-                           chips=mat.chips())
+                           chips=mat.chips(), extras_items=_extras_items())
+
+
+def _extras_items() -> list[dict]:
+    """Every billed extras item, in the order members claim, with its typical fee: the menu the
+    estimator's usage lines are chosen from."""
+    fees = est.typical_fees()
+    order = {s: i for i, s in enumerate(cl.SERVICE_ORDER)}
+    items = sorted(EXTRAS_ITEMS.items(), key=lambda kv: (order[kv[1][0]], list(EXTRAS_ITEMS).index(kv[0])))
+    return [{"item": k, "label": label, "svc": svc, "service": feats.SERVICE_LABELS.get(svc, svc),
+             "fee": (fees.get(k) or {}).get("fee")} for k, (svc, label) in items]
 
 
 # What each clinical category actually covers, in plain English, keyed the way a Difference names it
@@ -330,23 +347,18 @@ def card():
                                            state=sel.state, family=sel.family, scope=sel.scope)
         except EngineError:
             cheaper = []
-    # A focused benefit either names an extras service (dental, physio, optical...) or it doesn't
-    # (price, a clinical category, a waiting period). A service gets the fuller claim block below —
-    # covered, what each item pays back, what the year caps it at — everything else stays the plain
-    # one-line direct answer.
+    # The call sheet: every extras service with its limit, what a visit pays and the gap, in the order
+    # members claim (a service the rep asked about first, and opened); the hospital conditions only one
+    # side covers; the price a month and a year. A focused benefit with no service (price, a clinical
+    # category, a waiting period) is also answered on its own line at the top.
     focus_services = cl.services_in(sel.focus)
-    focus_categories = cl.categories_in(sel.focus)
+    focus_categories = set(cl.categories_in(sel.focus))
     focus_other = [k for k in sel.focus if not feats.item_service(k)]
     shown = []
     for c in cards:
-        nname = by_id[c.navy_id]["name"]
         answers = [df.compare_pair(k, vals.get(c.navy_id, {}).get(k), vals.get(c.comp_id, {}).get(k))
                    for k in focus_other if vals.get(c.navy_id, {}).get(k) or vals.get(c.comp_id, {}).get(k)]
-        claim_blocks = cl.claim_groups(c.navy_id, c.comp_id, vals, services=focus_services) if focus_services else []
-        # A hospital clinical category has no dollar benefit or wait of its own (the government data
-        # has none to give — docs/DATA_MODEL.md); what actually applies if she needs treatment is the
-        # excess, co-payment, known gap cover and the fund-wide waits, shown once alongside it.
-        hospital = cl.hospital_context(c.navy_id, c.comp_id, vals) if focus_categories else []
+        extras, neither = cl.extras_sheet(c.navy_id, c.comp_id, vals, focus=focus_services)
         # Only offer to prepare for an objection the card can actually speak to: "theirs is cheaper"
         # only when it really is, "what am I losing" only when something is genuinely in their favour.
         objections = []
@@ -354,8 +366,9 @@ def card():
             objections.append("price")
         if any(d.key != "price" for d in c.watch):
             objections.append("losing")
-        shown.append({"card": c, "verdict": suggest.verdict(c, nname, by_id[c.comp_id]["fund_name"]),
-                      "answers": answers, "claims": claim_blocks, "hospital": hospital, "objections": objections})
+        shown.append({"card": c, "answers": answers, "extras": extras, "neither": neither,
+                      "hospital": cl.hospital_sheet(c.navy_id, c.comp_id, vals),
+                      "price": cl.price_gap(c.price), "objections": objections})
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
     heads = []
@@ -376,7 +389,84 @@ def card():
         missing_rates=[by_id[i]["name"] for i in columns if "price" not in vals.get(i, {})],
         chip_rows={r.key for r in rows if r.tags & sel.chips},
         excess_options=sorted({float(r["excess"] or 0) for r in data["rates"]}),
-        followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids), cat_defs=CAT_DEFS)
+        followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids), cat_defs=CAT_DEFS,
+        focus_categories=focus_categories, extras_rows_shown=EXTRAS_ROWS_SHOWN)
+
+
+def _pair():
+    """The Navy Health and competitor policy ids a form names, or an error response."""
+    try:
+        navy_id, comp_id = int(request.form.get("navy", "")), int(request.form.get("comp", ""))
+    except ValueError:
+        return None, (jsonify({"error": "Which card?"}), 400)
+    return (navy_id, comp_id), None
+
+
+def _estimate_json(pe: est.PolicyEstimate) -> dict:
+    return {"total": pe.total, "lines": [
+        {"item": ln.item, "label": ln.label, "service": feats.SERVICE_LABELS.get(ln.service, ln.service),
+         "claims": ln.claims, "fee": ln.fee, "per_claim": ln.per_claim, "paid": ln.paid, "note": ln.note}
+        for ln in pe.lines]}
+
+
+@bp.route("/call/estimate", methods=["POST"])
+def call_estimate():
+    """What each policy of one card pays back in a year for a usage profile, and the premiums beside
+    it. Plain arithmetic on the government data (engine/estimate.py); no model call."""
+    _check_csrf()
+    sel = _selection(request.form)
+    if isinstance(sel, str):
+        return jsonify({"error": sel}), 400
+    pair, early = _pair()
+    if early:
+        return early
+    navy_id, comp_id = pair
+    try:
+        uses = est.clean_uses(json.loads(request.form.get("uses") or "[]"))
+    except ValueError:
+        return jsonify({"error": "That usage list couldn't be read."}), 400
+    try:
+        data = bn.fetch(Snapshot(), ids=[navy_id, comp_id], state=sel.state, family=sel.family, scope=sel.scope)
+    except EngineError as exc:
+        return jsonify({"error": str(exc)}), 400
+    by_id = {p["id"]: p for p in data["policies"]}
+    if navy_id not in by_id or comp_id not in by_id:
+        return jsonify({"error": "Which card?"}), 400
+    vals = bn.values(data, excess=sel.excess, order=[navy_id, comp_id])
+    fees = est.typical_fees()
+    out: dict = {"uses": [{"item": u.item, "times": u.times, "people": u.people, "fee": u.fee} for u in uses]}
+    for side, pid in (("navy", navy_id), ("comp", comp_id)):
+        price = vals.get(pid, {}).get("price")
+        out[side] = {"name": by_id[pid]["name"], "fund": by_id[pid]["fund_name"],
+                     "premium_year": round(price.size * 12, 2) if price else None,
+                     **_estimate_json(est.estimate(data, pid, uses, fees))}
+    return jsonify(out)
+
+
+@bp.route("/call/usage", methods=["POST"])
+def call_usage():
+    """How the member's household uses extras, read from what the rep typed into a profile the rep can
+    edit. The model chooses items and counts only; every dollar comes from /call/estimate."""
+    _check_csrf()
+    text = (request.form.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Say how they use their extras, e.g. “two check-ups each, glasses, weekly physio”."}), 400
+    if len(text) > MAX_USAGE_CHARS:
+        return jsonify({"error": f"Keep it under {MAX_USAGE_CHARS} characters."}), 400
+    family = request.form.get("family", "")
+    household = family.replace("_", " ") if family in FAMILY_TYPES else ""
+    accounting, refused = calls.begin("usage", {"chars": len(text)})
+    if refused:
+        return refused
+    try:
+        read = read_usage(text, client=get_client(), model=ROUTER_MODEL, household=household)
+    except Exception as exc:  # the rep can still add lines by hand
+        log.exception("usage failed")
+        calls.end(accounting, ROUTER_MODEL, error=exc)
+        return jsonify({"error": "I couldn't read that. Add the lines by hand below."}), 502
+    calls.end(accounting, ROUTER_MODEL, usage=read.usage, extra={"lines": len(read.uses)})
+    return jsonify({"uses": [{"item": u.item, "times": u.times, "people": u.people} for u in read.uses],
+                    "unclear": read.unclear})
 
 
 def _talk_pack(sel: "Selection", navy_id: int, comp_id: int):

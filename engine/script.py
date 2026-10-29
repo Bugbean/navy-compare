@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from engine.benefits import UNLIMITED, Value
+from engine.claims import EVERYDAY_SERVICES
 from engine.differences import Card, Difference
 
 UNITS = {"premium": "AUD/month", "wait_months": "months", "extras_item": "AUD", "extras_limit": "AUD",
@@ -34,6 +35,11 @@ def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int
         claimable["navy_note"] = d.navy.note
     if d.comp and d.comp.note:
         claimable["comp_note"] = d.comp.note
+    # A covered service's wait is part of its display ("Covered, 2 month wait"); without its own field
+    # the writer could never bind the 2, and the checker rejected every sentence that mentioned it.
+    for side, v in (("navy", d.navy), ("comp", d.comp)):
+        if v is not None and v.wait:
+            claimable[f"{side}_wait_months"] = v.wait
     if d.kind == "premium":
         for side, v in (("navy", d.navy), ("comp", d.comp)):
             if v and v.note.startswith("at $"):
@@ -57,13 +63,14 @@ def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int
 
 
 MAX_NEED_MATCHED_EXTRA = 4
+MAX_EVERYDAY_EXTRA = 3
 
 
 def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: str, family: str) -> list[dict]:
-    """The card's facts: the price, Navy Health's top strengths, the competitor's top strengths, the
-    excess trade-off, and — beyond the usual cutoff — anything that matches what the member said they
-    care about, so that fact reaches the writer even when it is not the single highest-scoring one.
-    With no chips active this is exactly the old top-5/top-3/excess selection; chips only ever add."""
+    """The card's facts: the price, the gaps in the everyday extras services, Navy Health's top
+    strengths, the competitor's top strengths, the excess trade-off, and — beyond the usual cutoff —
+    anything that matches what the member said they care about, so that fact reaches the writer even
+    when it is not the single highest-scoring one."""
     chosen: list[Difference] = []
     seen: set[str] = set()
 
@@ -74,6 +81,14 @@ def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: s
 
     if card.price and card.price.navy and card.price.comp:
         take(card.price)
+    # The services nearly every member claims on (dental, optical, physio...) come straight after the
+    # price: a real gap in one of those is worth more on a call than a bigger-scoring gap in a service
+    # few people use, and the writer falls back to the order it is given.
+    everyday = [d for d in card.stronger + card.watch
+                if d.key.split(":", 1)[0] in ("extras", "limit") and d.key.split(":", 1)[1] in EVERYDAY_SERVICES]
+    everyday.sort(key=lambda d: EVERYDAY_SERVICES.index(d.key.split(":", 1)[1]))
+    for d in everyday[:MAX_EVERYDAY_EXTRA]:
+        take(d)
     for d in card.stronger[:5]:
         if d.key != "price":
             take(d)
