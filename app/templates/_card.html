@@ -105,21 +105,35 @@
           {% if s.hospital %}{% set h = s.hospital %}
             <div class="sheet-block hospital-block">
               <h3>Hospital: what's covered</h3>
-              <div class="h-lists">
-                <div class="h-list navy_better">
-                  <h4>Navy Health covers, theirs doesn't <span class="count">{{ h.navy_only | length }}</span></h4>
-                  {% if h.navy_only %}<ul>{% for d in h.navy_only %}
-                    <li class="{{ 'focus' if d.key in focus_categories else '' }}"><details{% if d.key in focus_categories %} open{% endif %}><summary><strong>{{ d.label }}</strong> <span class="muted small">{{ d.navy.display | lower }} vs {{ d.comp.display | lower if d.comp else 'not listed' }}</span></summary>{{ cat_note(d) }}</details></li>
-                  {% endfor %}</ul>{% else %}<p class="muted small">Nothing.</p>{% endif %}
-                </div>
-                <div class="h-list comp_better">
-                  <h4>Theirs covers, Navy Health doesn't <span class="count">{{ h.comp_only | length }}</span></h4>
-                  {% if h.comp_only %}<ul>{% for d in h.comp_only %}
-                    <li class="{{ 'focus' if d.key in focus_categories else '' }}"><details{% if d.key in focus_categories %} open{% endif %}><summary><strong>{{ d.label }}</strong> <span class="muted small">{{ d.comp.display | lower }} vs {{ d.navy.display | lower if d.navy else 'not listed' }}</span></summary>{{ cat_note(d) }}</details></li>
-                  {% endfor %}</ul>{% else %}<p class="muted small">Nothing.</p>{% endif %}
-                </div>
-              </div>
-              {% if h.both %}<p class="muted small">Both cover the other {{ h.both }} conditions the same way.</p>{% endif %}
+              {% for title, items, dir in [("Navy Health covers, " ~ comp_fund ~ " doesn't", h.navy_only, "navy_better"),
+                                          (comp_fund ~ " covers, this Navy Health policy doesn't", h.comp_only, "comp_better")] %}
+                {% if items %}
+                  <h4 class="h-sec {{ dir }}">{{ title }} <span class="count">{{ items | length }}</span>
+                    <span class="muted small">biggest bills first</span></h4>
+                  <div class="h-items">
+                    {% for it in items %}{% set d = it.diff %}
+                      <div class="h-item {{ dir }}{% if d.key in focus_categories %} focus{% endif %}{% if loop.index > hospital_items_shown and d.key not in focus_categories %} h-more{% endif %}"{% if loop.index > hospital_items_shown and d.key not in focus_categories %} hidden{% endif %}>
+                        <div class="h-top">
+                          <strong>{{ d.label }}</strong>
+                          {% if it.procedure %}<span class="h-proc">e.g. {{ it.procedure }}</span>{% endif %}
+                          {% if it.private_cost %}<span class="h-cost" title="{{ it.source }}">typically ${{ '{:,.0f}'.format(it.private_cost) }} {{ it.cost_words }}</span>{% endif %}
+                        </div>
+                        <div class="h-sides">
+                          <div class="h-side {{ 'good' if dir == 'navy_better' else 'bad' }}"><span class="who">Navy Health</span>{{ it.navy_pays }}</div>
+                          <div class="h-side {{ 'good' if dir == 'comp_better' else 'bad' }}"><span class="who">{{ comp_fund }}</span>{{ it.comp_pays }}</div>
+                        </div>
+                        <p class="h-say"><span class="h-say-text">“{{ it.say }}”</span> <button type="button" class="link-btn h-copy">Copy</button></p>
+                        <p class="muted small h-about">{% if it.matters_to %}<strong>Most relevant to</strong> {{ it.matters_to }}. {% endif %}{% if d.key in cat_defs %}<strong>What it covers:</strong> {{ cat_defs[d.key] }}{% endif %}</p>
+                      </div>
+                    {% endfor %}
+                  </div>
+                  {% if items | length > hospital_items_shown %}
+                    <button type="button" class="link-btn h-show-all">Show all {{ items | length }}</button>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% if not h.navy_only and not h.comp_only %}<p class="muted small">Both cover every condition the same way.</p>
+              {% elif h.both %}<p class="muted small h-both">Both cover the other {{ h.both }} conditions the same way.</p>{% endif %}
               <table class="htable">
                 <thead><tr><th></th><th class="navy-col">Navy Health</th><th>{{ comp_fund }}</th></tr></thead>
                 <tbody>

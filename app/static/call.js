@@ -717,6 +717,16 @@
       $$(".x-more", b.closest(".extras-block")).forEach((g) => { g.hidden = false; });
       b.remove();
     }));
+    $$(".h-show-all", result).forEach((b) => b.addEventListener("click", () => {
+      const el = b.previousElementSibling;   // the .h-items this button follows
+      if (el) $$(".h-more", el).forEach((it) => { it.hidden = false; });
+      b.remove();
+    }));
+    $$(".h-copy", result).forEach((b) => b.addEventListener("click", () => {
+      const t = $(".h-say-text", b.closest(".h-say"));
+      const text = (t.textContent || "").replace(/^“|”$/g, "");
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotice("Copied."), () => {});
+    }));
     $$(".estimator", result).forEach(wireEstimator);
     $$(".objections", result).forEach((box) => {
       const input = $(".objection-input", box), ask = $(".objection-ask", box);

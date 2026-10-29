@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from engine.benefits import UNLIMITED, Value
-from engine.claims import EVERYDAY_SERVICES
+from engine.claims import EVERYDAY_SERVICES, category_costs
 from engine.differences import Card, Difference
 
 UNITS = {"premium": "AUD/month", "wait_months": "months", "extras_item": "AUD", "extras_limit": "AUD",
@@ -29,7 +29,8 @@ def _side(v: Optional[Value]):
     return v.display
 
 
-def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int, state: str, family: str) -> dict:
+def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int, state: str, family: str,
+          costs: Optional[dict] = None) -> dict:
     claimable = {}
     if d.navy and d.navy.note:
         claimable["navy_note"] = d.navy.note
@@ -40,6 +41,18 @@ def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int
     for side, v in (("navy", d.navy), ("comp", d.comp)):
         if v is not None and v.wait:
             claimable[f"{side}_wait_months"] = v.wait
+    # A clinical category says only covered or not; what that is worth is the typical private cost of
+    # its most common procedure and the public wait for it (config/category_costs.yaml), given to the
+    # writer as figures it can bind so it can say "a knee replacement typically costs about $X".
+    procedure, cost_words = "", ""
+    if d.kind == "cover_category":
+        cost = (costs or {}).get(d.key) or {}
+        procedure = cost.get("procedure") or ""
+        cost_words = cost.get("cost_words") or "as a private patient"
+        if cost.get("private_cost"):
+            claimable["typical_private_cost"] = float(cost["private_cost"])
+        if cost.get("public_wait_days"):
+            claimable["public_median_wait_days"] = float(cost["public_wait_days"])
     if d.kind == "premium":
         for side, v in (("navy", d.navy), ("comp", d.comp)):
             if v and v.note.startswith("at $"):
@@ -51,8 +64,11 @@ def _fact(fid: str, d: Difference, navy_name: str, comp_name: str, snapshot: int
         "unit": UNITS.get(d.kind),
         "text": f"{d.label}: {navy_name} {d.navy.display if d.navy else 'n/a'}"
                 f"{' ' + d.navy.note if d.navy and d.navy.note else ''}; {comp_name} "
-                f"{d.comp.display if d.comp else 'n/a'}{' ' + d.comp.note if d.comp and d.comp.note else ''}",
-        "names": [navy_name, comp_name, d.label, "Navy Health"],
+                f"{d.comp.display if d.comp else 'n/a'}{' ' + d.comp.note if d.comp and d.comp.note else ''}"
+                + (f". Its most common procedure is {procedure}; typical_private_cost is what it typically "
+                   f"costs {cost_words}, public_median_wait_days the median public wait for it"
+                   if procedure else ""),
+        "names": [navy_name, comp_name, d.label, "Navy Health"] + ([procedure] if procedure else []),
         "occurrences": None,
         "scope": {"state": state, "family_type": family, "direction": d.direction,
                   **({"matches_what_member_cares_about": True} if d.chip_match else {})},
@@ -104,4 +120,6 @@ def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: s
         if d.key == "excess":
             take(d)
             break
-    return [_fact(f"F{i + 1}", d, navy_name, comp_name, snapshot, state, family) for i, d in enumerate(chosen)]
+    costs = category_costs()
+    return [_fact(f"F{i + 1}", d, navy_name, comp_name, snapshot, state, family, costs)
+            for i, d in enumerate(chosen)]

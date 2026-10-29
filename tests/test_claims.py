@@ -140,12 +140,82 @@ def _hospital_vals():
 
 def test_the_hospital_sheet_lists_what_only_one_side_covers_and_counts_the_rest():
     h = cl.hospital_sheet(1, 2, _hospital_vals())
-    assert [d.key for d in h.navy_only] == ["cover:BoneJointMuscle"]
-    assert [d.key for d in h.comp_only] == ["cover:Psychiatric"]     # covered beats restricted
+    assert [i.diff.key for i in h.navy_only] == ["cover:BoneJointMuscle"]
+    assert [i.diff.key for i in h.comp_only] == ["cover:Psychiatric"]     # covered beats restricted
     assert h.both == 1
     keys = [d.key for d in h.essentials]
     assert keys == ["excess", "known_gap"]
     assert next(d for d in h.essentials if d.key == "excess").direction == "trade_off"
+
+
+COSTS = {
+    "cover:BoneJointMuscle": {"procedure": "a shoulder reconstruction", "private_cost": 18000, "public_wait_days": 240,
+                              "matters_to": "active people with injuries", "source_cost": "MCF", "source_wait": "AIHW"},
+    "cover:Psychiatric": {"procedure": "a mental health admission", "private_cost": 25000},
+    "RESTRICTED": {"default_per_night": 400, "private_per_night": 1500},
+}
+
+
+def test_a_hospital_difference_says_what_the_member_pays_on_each_side_in_dollars_and_time():
+    h = cl.hospital_sheet(1, 2, _hospital_vals(), costs=COSTS)
+    it = h.navy_only[0]
+    assert it.private_cost == 18000 and it.wait == "about 8 months" and it.procedure == "a shoulder reconstruction"
+    assert it.navy_pays == "Covered: pays the $500 excess, plus any doctors' gap"
+    assert it.comp_pays == ("Not covered: pays the whole private bill (typically $18,000), "
+                            "or waits about 8 months as a public patient")
+    assert it.say == ("If you ever need a shoulder reconstruction, which typically costs about $18,000 in a private "
+                      "hospital, with Navy Health you'd pay the $500 excess plus any doctors' gap. Your current "
+                      "policy doesn't cover it, so you'd pay it yourself or wait about 8 months in the public system.")
+
+
+def test_restricted_cover_is_explained_in_money_not_left_as_a_word():
+    h = cl.hospital_sheet(1, 2, _hospital_vals(), costs=COSTS)
+    it = h.comp_only[0]                      # Navy restricted, theirs covered
+    assert it.navy_pays.startswith("Restricted: paid only at the public-hospital rate (the government minimum, "
+                                   "$400 a night, against about $1,500 a private hospital charges)")
+    # Said to the member as honestly as a win would be: their policy is better here.
+    assert it.say.startswith("Your current policy does cover a mental health admission")
+    assert "this Navy Health policy only covers it at the public-hospital rate" in it.say
+    # With no sourced private charge a night, only the minimum is stated - no comparison is made up.
+    no_charge = {**COSTS, "RESTRICTED": {"default_per_night": 524}}
+    it = cl.hospital_sheet(1, 2, _hospital_vals(), costs=no_charge).comp_only[0]
+    assert "(the government minimum, $524 a night)" in it.navy_pays and "against" not in it.navy_pays
+
+
+def test_without_a_sourced_figure_nothing_is_invented():
+    h = cl.hospital_sheet(1, 2, _hospital_vals(), costs={})
+    it = h.navy_only[0]
+    assert it.private_cost is None and it.wait == ""
+    assert "$" not in it.comp_pays.replace("$500", "") and "typically" not in it.say
+    assert it.comp_pays == "Not covered: pays the whole private bill, or goes on the public waiting list"
+
+
+def test_the_biggest_bill_comes_first_unless_the_rep_asked_about_one():
+    vals = _hospital_vals()
+    for key in ("cover:Cataracts", "cover:JointReplacements"):
+        vals[1][key] = Value(key, "cover_category", "Covered", 2.0, 2.0)
+        vals[2][key] = Value(key, "cover_category", "Not covered", 0.0, 0.0)
+    costs = {**COSTS, "cover:Cataracts": {"private_cost": 3500}, "cover:JointReplacements": {"private_cost": 30000}}
+    h = cl.hospital_sheet(1, 2, vals, costs=costs)
+    assert [i.diff.key for i in h.navy_only] == ["cover:JointReplacements", "cover:BoneJointMuscle", "cover:Cataracts"]
+    h = cl.hospital_sheet(1, 2, vals, costs=costs, focus={"cover:Cataracts"})
+    assert h.navy_only[0].diff.key == "cover:Cataracts"
+
+
+def test_every_clinical_category_has_cost_context_with_a_source_for_each_figure():
+    from config.features import CATEGORY_LABELS
+    costs = cl.category_costs()
+    assert {k.removeprefix("cover:") for k in costs if k != "RESTRICTED"} == set(CATEGORY_LABELS)
+    for key, c in costs.items():
+        if key == "RESTRICTED":
+            assert c["default_per_night"] and c["source"]
+            continue
+        assert c["procedure"] and c["matters_to"], key
+        assert "(" not in (c.get("cost_words") or ""), f"{key}: cost_words are shown inside brackets"
+        if c.get("private_cost"):
+            assert c["source_cost"] and c["url_cost"], key
+        if c.get("public_wait_days"):
+            assert c["source_wait"] and c["url_wait"], key
 
 
 def test_an_extras_only_pair_has_no_hospital_sheet():

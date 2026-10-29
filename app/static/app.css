@@ -325,20 +325,33 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .x-show-all { margin-top: .5rem; }
 .x-neither { margin-top: .4rem; }
 
-/* Hospital: what only one side covers, then what applies to every admission. */
-.h-lists { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: .5rem; }
-@media (max-width: 700px) { .h-lists { grid-template-columns: 1fr; } }
-.h-list { border-radius: 8px; padding: .55rem .7rem; background: var(--bg); border-left: 3px solid var(--border); }
-.h-list.navy_better { border-left-color: var(--green); }
-.h-list.comp_better { border-left-color: var(--red); }
-.h-list h4 { font-size: .82rem; margin-bottom: .35rem; }
-.h-list.navy_better h4 { color: var(--green); }
-.h-list.comp_better h4 { color: var(--neg-text); }
-.h-list ul { list-style: none; }
-.h-list li { padding: 3px 0; font-size: .85rem; }
-.h-list li.focus { box-shadow: inset 3px 0 0 var(--accent); padding-left: 6px; }
-.h-list summary { cursor: pointer; }
-.h-list .cat-def { margin: 2px 0 4px 1rem; }
+/* Hospital: each condition one side covers and the other doesn't, with what it costs the member on
+   each side, the public wait, and a line to read out. Then what applies to every admission. */
+.h-sec { font-size: .86rem; margin: .7rem 0 .45rem; }
+.h-sec.navy_better { color: var(--green); }
+.h-sec.comp_better { color: var(--neg-text); }
+.h-sec .muted { font-weight: 400; margin-left: .3rem; }
+.h-items { display: flex; flex-direction: column; gap: .55rem; }
+.h-item { border-radius: 8px; padding: .6rem .75rem; background: var(--bg); border-left: 4px solid var(--border); }
+.h-item.navy_better { border-left-color: var(--green); }
+.h-item.comp_better { border-left-color: var(--red); }
+.h-item.focus { box-shadow: 0 0 0 2px var(--accent); }
+.h-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .6rem; margin-bottom: .45rem; }
+.h-top strong { font-size: .95rem; }
+.h-proc { font-size: .8rem; color: var(--muted); }
+.h-cost { margin-left: auto; font-weight: 800; font-size: .95rem; white-space: nowrap; }
+.h-sides { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+@media (max-width: 640px) { .h-sides { grid-template-columns: 1fr; } .h-cost { margin-left: 0; } }
+.h-side { border-radius: 6px; padding: .4rem .55rem; font-size: .84rem; line-height: 1.4; }
+.h-side .who { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 1px; }
+.h-side.good { background: var(--tint-good); }
+.h-side.bad { background: var(--tint-bad); }
+.h-say { margin-top: .45rem; font-size: .9rem; line-height: 1.45; padding: .4rem .6rem; border-left: 3px solid var(--accent);
+         background: var(--tint-accent-lo); border-radius: 4px; }
+.h-say .link-btn { margin-left: .3rem; }
+.h-about { margin-top: .35rem; }
+.h-show-all { margin-top: .4rem; }
+.h-both { margin-top: .6rem; }
 .count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 999px; font-size: .75rem; padding: 0 6px; background: var(--surface); color: var(--text); }
 .htable { margin-top: .6rem; font-size: .84rem; table-layout: fixed; }
 .htable th, .htable td { white-space: normal; padding: 5px 8px; text-transform: none; letter-spacing: 0; }

@@ -79,6 +79,7 @@ MAX_OBJECTION_CHARS = 300
 MAX_POLICIES = 10
 MAX_CARDS = 6
 EXTRAS_ROWS_SHOWN = 8   # the rest of the extras services are one click away
+HOSPITAL_ITEMS_SHOWN = 4  # per side; the biggest bills, and anything asked about, always show
 MAX_USAGE_CHARS = 400
 MAX_REQUEST_CHARS = 500
 REAL_STATES = [s for s in STATES if s != "ALL"]
@@ -367,7 +368,7 @@ def card():
         if any(d.key != "price" for d in c.watch):
             objections.append("losing")
         shown.append({"card": c, "answers": answers, "extras": extras, "neither": neither,
-                      "hospital": cl.hospital_sheet(c.navy_id, c.comp_id, vals),
+                      "hospital": cl.hospital_sheet(c.navy_id, c.comp_id, vals, focus=focus_categories),
                       "price": cl.price_gap(c.price), "objections": objections})
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
@@ -390,7 +391,8 @@ def card():
         chip_rows={r.key for r in rows if r.tags & sel.chips},
         excess_options=sorted({float(r["excess"] or 0) for r in data["rates"]}),
         followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids), cat_defs=CAT_DEFS,
-        focus_categories=focus_categories, extras_rows_shown=EXTRAS_ROWS_SHOWN)
+        focus_categories=focus_categories, extras_rows_shown=EXTRAS_ROWS_SHOWN,
+        hospital_items_shown=HOSPITAL_ITEMS_SHOWN)
 
 
 def _pair():
