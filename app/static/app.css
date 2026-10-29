@@ -218,7 +218,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .qa.navy_better .qa-verdict { color: var(--green); }
 .qa.comp_better .qa-verdict { color: var(--neg-text); }
 @media (max-width: 760px) { .qa { grid-template-columns: 1fr 1fr; } .qa-label, .qa-verdict { grid-column: 1 / -1; } }
-.qa .cat-def, .qa .cat-consequence { grid-column: 1 / -1; margin-top: 2px; }
+.qa .cat-def { grid-column: 1 / -1; margin-top: 2px; }
 
 /* What a member can actually claim, by service: what it pays per item, what the year caps it at.
    The same .qa row as the direct answer above, grouped under the service so a rep can read the
@@ -262,7 +262,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .diff-vals { grid-column: 1 / 2; font-size: .85rem; }
 .diff-vals .vs { color: var(--muted); margin: 0 .3rem; }
 .mat { grid-column: 2; grid-row: 1 / span 2; align-self: center; width: 10px; height: 10px; border-radius: 50%; }
-.diff .cat-def, .diff .cat-consequence { grid-column: 1 / 2; margin-top: 2px; }
+.diff .cat-def { grid-column: 1 / 2; margin-top: 2px; }
 .mat-3 { background: var(--text); } .mat-2 { background: var(--muted); } .mat-1 { background: var(--border); } .mat-0 { display: none; }
 .need-mark { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #fff; border-radius: 3px; padding: 0 4px; }
 .answer-card details { margin-top: .5rem; }

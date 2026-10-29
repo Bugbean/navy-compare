@@ -248,7 +248,7 @@ def test_every_clinical_category_has_a_plain_english_definition():
     assert all(d.strip() and d[0].isupper() for d in call.CAT_DEFS.values())
 
 
-def test_a_clinical_category_difference_explains_itself_on_the_card(client):
+def test_a_clinical_category_difference_shows_what_it_covers_not_a_restated_verdict(client):
     # Rendered directly against the template, with a hand-built difference, so this does not depend on
     # which two policies happen to differ on a category in whichever database is configured.
     import app.call as call
@@ -267,4 +267,6 @@ def test_a_clinical_category_difference_explains_itself_on_the_card(client):
             focus=[], snapshot=1, release_date="2026-01-01", missing_rates=[], chip_rows=set(),
             excess_options=[], followups=[], auto=None, meta={}, comp_only=False, cat_defs=call.CAT_DEFS)
     assert "Injuries and diseases of the musculoskeletal system" in html
-    assert "Not covered with HCF: without it there, the member would need the public system or pay privately" in html
+    # The Covered/Not covered values already say which side has it; nothing should restate that as a
+    # separate sentence ("Not covered with HCF: ...").
+    assert "Not covered with" not in html and "public system" not in html

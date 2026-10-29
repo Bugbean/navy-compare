@@ -1,15 +1,11 @@
 {# The answer to what the rep typed: answer first, then the card, then what to do next, then the table. #}
 {% macro side(v) -%}{% if v %}{{ v.display }}{% if v.note %} <span class="muted">{{ v.note }}</span>{% endif %}{% else %}<span class="muted">not part of this policy</span>{% endif %}{%- endmacro %}
-{# What a clinical category actually covers, and — when only one side has it — what going without it
-   actually means, so "Covered" is never shown as a bare, unexplained badge. #}
-{% macro cat_note(d, comp_fund) -%}
+{# What a clinical category actually covers, so "Covered" is never shown as a bare, unexplained
+   badge. The Covered/Not covered values themselves already say which side has it — this only adds
+   what the category means, not a restatement of which policy does or doesn't have it. #}
+{% macro cat_note(d) -%}
   {% if d.kind == 'cover_category' and d.key in cat_defs %}
     <p class="cat-def muted small">{{ cat_defs[d.key] }}</p>
-    {% if d.direction == 'navy_better' %}
-      <p class="cat-consequence muted small">Not covered with {{ comp_fund }}: without it there, the member would need the public system or pay privately for it.</p>
-    {% elif d.direction == 'comp_better' %}
-      <p class="cat-consequence muted small">Not covered with Navy Health: without it here, the member would need the public system or pay privately for it.</p>
-    {% endif %}
   {% endif %}
 {%- endmacro %}
 {% macro diff_line(d, comp_fund=none) -%}
@@ -17,7 +13,7 @@
     <span class="diff-label">{{ d.label }}{% if d.chip_match %} <span class="need-mark" title="Matches what the member cares about">need</span>{% endif %}</span>
     <span class="diff-vals"><span class="v-navy">{{ side(d.navy) }}</span><span class="vs">vs</span><span class="v-comp">{{ side(d.comp) }}</span></span>
     <span class="mat mat-{{ d.materiality }}" title="How much this matters: {{ d.materiality }} of 3"></span>
-    {{ cat_note(d, comp_fund) }}
+    {{ cat_note(d) }}
   </li>
 {%- endmacro %}
 {% macro qa_row(d, comp_fund, label_override=none) -%}
@@ -26,7 +22,7 @@
     <span class="qa-navy"><span class="who">Navy Health</span> {{ side(d.navy) }}</span>
     <span class="qa-comp"><span class="who">{{ comp_fund }}</span> {{ side(d.comp) }}</span>
     <span class="qa-verdict">{% if d.direction == 'navy_better' %}Navy Health is better{% elif d.direction == 'comp_better' %}Theirs is better{% elif d.direction == 'same' %}The same{% elif d.direction == 'trade_off' %}A trade-off{% elif d.direction == 'missing' %}Only one has it{% else %}Different{% endif %}</span>
-    {{ cat_note(d, comp_fund) }}
+    {{ cat_note(d) }}
   </div>
 {%- endmacro %}
 
