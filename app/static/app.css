@@ -40,30 +40,8 @@
   --neg-text:       #c23b2c;
   --wait-text:      #8a6400;
   --corner:   12px 12px 36px 12px;   /* the brand's cards: one large rounded corner */
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:       #1a1f2e;
-    --surface:  #262d41;
-    --border:   #3a4258;
-    --accent:   var(--yellow);
-    --on-accent: var(--navy);
-    --text:     #f2f0f1;
-    --muted:    #a6acbd;
-    --green:    #a6d45a;
-    --red:      #ff8a7d;
-    --cream:    rgba(252, 195, 0, 0.08);
-    --head-bg:  #1e2b5f;
-    --row-hover:      #2e3650;
-    --tint-good:      rgba(119, 173, 28, 0.25);
-    --tint-bad:       rgba(255, 106, 91, 0.22);
-    --tint-sky:       rgba(128, 170, 190, 0.18);
-    --tint-accent-lo: rgba(252, 195, 0, 0.10);
-    --tint-accent-hi: rgba(252, 195, 0, 0.25);
-    --neg-text:       #ff9c90;
-    --wait-text:      #f2c94c;
-  }
+  /* Always the brand's light look, whatever the device is set to: form controls and scrollbars too. */
+  color-scheme: light;
 }
 
 body {
@@ -82,11 +60,9 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
                   text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .topbar .brand { display: flex; align-items: center; gap: .75rem; color: var(--accent); }
 .topbar .brand:hover { text-decoration: none; }
-/* The logo's wordmark is navy on a transparent background: it sits straight on the white bar, and on
-   its own small white chip only in the dark theme, where it would otherwise vanish. */
+/* The logo's wordmark is navy on a transparent background: it sits straight on the white bar. */
 .brand-mark { display: inline-flex; align-items: center; }
 .brand-mark img { display: block; height: 30px; width: auto; }
-@media (prefers-color-scheme: dark) { .brand-mark { background: #fff; border-radius: 6px; padding: 4px 8px; } .brand-mark img { height: 24px; } }
 .brand-text { font-family: var(--font-head); font-size: .95rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
               color: var(--accent); padding-left: .75rem; border-left: 2px solid var(--yellow); line-height: 1.2; }
 .topbar .spacer { flex: 1; }
@@ -297,8 +273,6 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .gap-who { font-size: .78rem; font-weight: 600; }
 .gap-year { font-family: var(--font-head); font-size: 1.6rem; font-weight: 800; line-height: 1.2; }
 .sheet-gap.navy_better .gap-year { color: var(--yellow); }
-/* In the dark theme the sheet's top band is navy too: the yellow edge keeps the box from vanishing. */
-@media (prefers-color-scheme: dark) { .sheet-gap.navy_better { background: #141c40; border: 2px solid var(--yellow); } }
 .sheet-gap.comp_better .gap-year { color: var(--neg-text); }
 @media (max-width: 760px) {
   .sheet-head { grid-template-columns: 1fr 1fr; }
@@ -326,7 +300,6 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .xtable tr:hover td { background: none; }
 .xrow td span { display: block; }
 .x-limit { font-weight: 600; color: var(--accent); }
-@media (prefers-color-scheme: dark) { .x-limit { color: var(--text); } }
 .x-sub { font-size: .76rem; color: var(--muted); }
 .x-wait { font-size: .74rem; color: var(--wait-text); }
 .x-no { color: var(--muted); font-style: italic; }
