@@ -123,6 +123,63 @@ def _who(direction: str) -> str:
     return "Navy Health" if direction == NAVY_BETTER else "Theirs"
 
 
+# A difference too small to score (engine/materiality.py) still is one: a rep who says "they're the
+# same" when one pays $2.50 more is caught out. Those are said, marked minor, never hidden as the same.
+MINOR = "minor"
+
+
+def gap_words(d: Optional[Difference]) -> tuple[str, str]:
+    """(direction, the difference in plain words) for any one benefit: "Same", "Navy Health only",
+    "Theirs pays $40 more a year", "Minor: Navy Health pays $2.50 more". The direction is the card's
+    own, or MINOR where the values differ by less than the card scores as a difference."""
+    if d is None:
+        return SAME, ""
+    n, c = d.navy, d.comp
+    if n is None or c is None:
+        return d.direction, f"Only {'Navy Health' if n else 'theirs'} lists this"
+    if (n.display, n.note) == (c.display, c.note):
+        return SAME, "Same"
+    if d.kind == "extras_service" and n.rank and c.rank and (n.wait or 0) != (c.wait or 0):
+        shorter = NAVY_BETTER if (n.wait or 0) < (c.wait or 0) else COMP_BETTER
+        return shorter, f"{_who(shorter)}: {abs((n.wait or 0) - (c.wait or 0)):g} months shorter wait"
+    if d.direction == TRADE_OFF and n.size is not None and c.size is not None:
+        lower = "Navy Health" if n.size < c.size else "Theirs"
+        return TRADE_OFF, f"{lower}: {_money(abs(n.size - c.size))} lower excess (usually a higher premium)"
+    side, minor = d.direction, False
+    if side not in (NAVY_BETTER, COMP_BETTER):
+        comparable = n.rank is not None and c.rank is not None and (n.basis == c.basis or "any" in (n.basis, c.basis))
+        if not comparable or n.rank == c.rank:
+            return DIFFERENT, "Different, not better or worse"
+        side, minor = (NAVY_BETTER if n.rank > c.rank else COMP_BETTER), True
+    who = _who(side)
+    win, lose = (n, c) if side == NAVY_BETTER else (c, n)
+    delta = None
+    if n.size is not None and c.size is not None and UNLIMITED not in (n.size, c.size):
+        delta = abs(n.size - c.size)
+    kind = d.kind
+    if kind == "premium" and delta:
+        text = f"{who}: {_money(delta)} a month cheaper"
+    elif kind in ("extras_limit", "extras_item") and win.size == UNLIMITED:
+        text = f"{who}: no annual limit"
+    elif kind in ("extras_limit", "extras_item") and not lose.rank:
+        text = f"{who} only"
+    elif kind == "extras_limit" and delta:
+        text = f"{who}: {_money(delta)} more a year"
+    elif kind == "extras_item" and delta and win.basis == "percent":
+        text = f"{who} pays {delta:g}% more of the fee"
+    elif kind == "extras_item" and delta:
+        text = f"{who} pays {_money(delta)} more"
+    elif kind == "wait_months" and delta:
+        text = f"{who}: {delta:g} months shorter wait"
+    elif kind == "copayment" and delta:
+        text = f"{who}: {_money(delta)} a day less co-payment"
+    elif kind in ("cover_category", "extras_service"):
+        text = f"{who} only" if not lose.rank else f"{who} covers it more fully"
+    else:
+        text = f"{who} is better"
+    return (MINOR, f"Minor: {text}") if minor else (side, text)
+
+
 def _gap(coverage: Optional[Difference], limit: Optional[Difference],
          items: list[Difference]) -> tuple[str, str]:
     """(direction, the gap in plain words), judged in the order a member feels it: whether it is
@@ -149,18 +206,29 @@ def _gap(coverage: Optional[Difference], limit: Optional[Difference],
         return top.direction, f"{_who(top.direction)}: pays more per visit"
     if limit and limit.direction == DIFFERENT:
         return DIFFERENT, "Limits work differently"
+    # Nothing big enough to score: say the largest small difference rather than "Same".
+    for d in [limit, coverage, *sorted(items, key=lambda i: -(i.size or 0))]:
+        direction, words = gap_words(d)
+        if direction == MINOR:
+            if d is not limit and d is not coverage:
+                words += f" per {short_item(d.key.split(':', 1)[1])}"
+            return MINOR, words
+        if direction in (NAVY_BETTER, COMP_BETTER) and d is coverage:
+            return direction, words
     return SAME, "Same"
 
 
 def extras_sheet(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], *,
                  focus: Iterable[str] = (), cfg: Optional[dict] = None) -> tuple[list[ExtrasRow], list[str]]:
-    """Every extras service either policy covers, in the order members claim (services the rep asked
-    about first), and the labels of those neither covers. Empty when neither policy has extras."""
+    """Every extras service either policy lists, in the order members claim (services the rep asked
+    about first) and those neither covers last; and the labels of those neither covers. Empty when
+    neither policy has extras."""
     n, c = vals.get(navy_id, {}), vals.get(comp_id, {})
     focus = [s for s in focus if s in SERVICE_ORDER]
     order = focus + [s for s in SERVICE_ORDER if s not in focus]
     rows: list[ExtrasRow] = []
     neither: list[str] = []
+    neither_rows: list[ExtrasRow] = []
     for svc in order:
         cov_key, lim_key = f"extras:{svc}", f"limit:{svc}"
         nv, cv = n.get(cov_key), c.get(cov_key)
@@ -169,6 +237,8 @@ def extras_sheet(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], 
         label = SERVICE_LABELS.get(svc, svc)
         if not (nv and nv.rank) and not (cv and cv.rank):
             neither.append(label)
+            neither_rows.append(ExtrasRow(service=svc, label=label, navy=_cell(svc, n), comp=_cell(svc, c),
+                                          direction=SAME, gap="Neither covers it", items=[], limit=None))
             continue
         coverage = compare_pair(cov_key, nv, cv, cfg)
         limit = compare_pair(lim_key, n.get(lim_key), c.get(lim_key), cfg) if (n.get(lim_key) or c.get(lim_key)) else None
@@ -177,7 +247,8 @@ def extras_sheet(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], 
         direction, gap = _gap(coverage, limit, items)
         rows.append(ExtrasRow(service=svc, label=label, navy=_cell(svc, n), comp=_cell(svc, c),
                               direction=direction, gap=gap, items=items, limit=limit, focus=svc in focus))
-    return rows, neither
+    # Services neither covers come last, so "show everything" really is every service.
+    return rows + neither_rows, neither
 
 
 # ── hospital ──────────────────────────────────────────────────────────────────
@@ -215,91 +286,124 @@ def _wait_words(days: Optional[float]) -> str:
 
 @dataclass
 class HospitalItem:
-    """One clinical category the two policies cover differently, with what it means for the member."""
+    """One clinical category, both sides, with what it means for the member."""
     diff: Difference
+    direction: str = SAME            # the difference's direction (gap_words)
+    gap: str = ""                    # the difference in plain words: "Navy Health only", "Same"
     procedure: str = ""              # its most common procedure, in plain words
     private_cost: Optional[float] = None
     cost_words: str = "privately"    # what the figure is, where it is not a private bill (a device's price)
     wait: str = ""                   # the median public wait, in words
     matters_to: str = ""
-    navy_pays: str = ""              # what the member pays with each policy, said plainly
-    comp_pays: str = ""
-    say: str = ""                    # a line the rep can read out
+    navy_status: str = ""            # "Covered", "Restricted", "Not covered"
+    navy_detail: str = ""            # what the member pays with it, said plainly
+    comp_status: str = ""
+    comp_detail: str = ""
+    say: str = ""                    # a line the rep can read out, where the two differ
     source: str = ""
 
+    @property
+    def navy_pays(self) -> str:
+        return f"{self.navy_status}: {self.navy_detail}"
 
-def _pays(v: Optional[Value], excess: Optional[Value], cost: dict, restricted: dict) -> str:
-    """What the member pays for this category on one policy."""
+    @property
+    def comp_pays(self) -> str:
+        return f"{self.comp_status}: {self.comp_detail}"
+
+
+def _excess(v: Optional[Value]) -> Optional[float]:
+    return v.size if v is not None and v.size is not None else None
+
+
+def _pays(v: Optional[Value], excess: Optional[float], cost: dict, restricted: dict) -> tuple[str, str]:
+    """(status, what the member pays) for this category on one policy."""
     words = f" {cost['cost_words']}" if cost.get("cost_words") else ""
     price = f" (typically {_money(cost['private_cost'])}{words})" if cost.get("private_cost") else ""
     wait = _wait_words(cost.get("public_wait_days"))
     public = f", or waits {wait} as a public patient" if wait else ", or goes on the public waiting list"
     if v is None or not v.rank:
-        return f"Not covered: pays the whole private bill{price}{public}"
+        return "Not covered", f"pays the whole private bill{price}{public}"
     if v.rank < 2:
         rate = ""
         if restricted.get("default_per_night"):
             rate = f" (the government minimum, {_money(restricted['default_per_night'])} a night"
             rate += (f", against about {_money(restricted['private_per_night'])} a private hospital charges)"
                      if restricted.get("private_per_night") else ")")
-        return f"Restricted: paid only at the public-hospital rate{rate}, so most of a private bill{price} is left to pay"
-    ex = excess.size if excess is not None and excess.size is not None else None
-    if ex is None:
-        return "Covered as a private patient"
-    return ("Covered: no excess to pay" if ex == 0 else f"Covered: pays the {_money(ex)} excess") + \
+        return "Restricted", f"paid only at the public-hospital rate{rate}, so most of a private bill{price} is left to pay"
+    if excess is None:
+        return "Covered", "as a private patient"
+    return "Covered", ("no excess to pay" if excess == 0 else f"pays the {_money(excess)} excess") + \
         ", plus any doctors' gap"
 
 
-def _say(item: HospitalItem, navy_better: bool) -> str:
+def _say(item: HospitalItem, navy_excess: Optional[float]) -> str:
     """A line the rep reads to the member, about the member's own (current) policy: "your current
-    policy", never the fund's registered name."""
+    policy", never the fund's registered name. Empty where the two policies cover it the same way."""
     what = item.procedure or item.diff.label.lower()
     where = "in a private hospital" if item.cost_words == "privately" else item.cost_words
     cost = f", which typically costs about {_money(item.private_cost)} {where}" if item.private_cost else ""
     wait = f" or wait {item.wait} in the public system" if item.wait else " or go on the public waiting list"
-    if navy_better:
-        ex = item.navy_pays.split(", plus")[0].removeprefix("Covered: ")      # "pays the $500 excess"
-        mine = (f"you'd pay {ex.removeprefix('pays ')} plus any doctors' gap" if ex.startswith("pays the")
+    if item.diff.direction == NAVY_BETTER:
+        mine = (f"you'd pay the {_money(navy_excess)} excess plus any doctors' gap" if navy_excess
                 else "there's no excess to pay, only any doctors' gap")
         if item.diff.navy and item.diff.navy.rank < 2:
             mine = "it's covered, though only at the public-hospital rate"
         return (f"If you ever need {what}{cost}, with Navy Health {mine}. "
                 f"Your current policy doesn't cover it{' fully' if item.diff.comp and item.diff.comp.rank else ''}, "
                 f"so you'd pay it yourself{wait}.")
-    ours = ("only covers it at the public-hospital rate" if item.diff.navy and item.diff.navy.rank
-            else "doesn't cover it")
-    return (f"Your current policy does cover {what}{cost}, and this Navy Health policy {ours}. "
-            f"If that matters to you, we can look at a Navy Health policy that does.")
+    if item.diff.direction == COMP_BETTER:
+        ours = ("only covers it at the public-hospital rate" if item.diff.navy and item.diff.navy.rank
+                else "doesn't cover it")
+        return (f"Your current policy does cover {what}{cost}, and this Navy Health policy {ours}. "
+                f"If that matters to you, we can look at a Navy Health policy that does.")
+    return ""
 
 
 def _item(d: Difference, n: dict[str, Value], c: dict[str, Value], costs: dict) -> HospitalItem:
     cost = costs.get(d.key) or {}
     restricted = costs.get("RESTRICTED") or {}
-    item = HospitalItem(diff=d, procedure=cost.get("procedure") or "",
+    direction, gap = gap_words(d)
+    if direction == SAME:
+        gap = "Same: both cover it" if d.navy and d.navy.rank == 2 else (
+            "Same: neither covers it" if not (d.navy and d.navy.rank) else "Same: both restricted")
+    item = HospitalItem(diff=d, direction=direction, gap=gap, procedure=cost.get("procedure") or "",
                         private_cost=float(cost["private_cost"]) if cost.get("private_cost") else None,
                         cost_words=cost.get("cost_words") or "privately",
                         wait=_wait_words(cost.get("public_wait_days")), matters_to=cost.get("matters_to") or "",
                         source="; ".join(s for s in (cost.get("source_cost"), cost.get("source_wait")) if s))
-    item.navy_pays = _pays(d.navy, n.get("excess"), cost, restricted)
-    item.comp_pays = _pays(d.comp, c.get("excess"), cost, restricted)
-    item.say = _say(item, d.direction == NAVY_BETTER)
+    navy_excess = _excess(n.get("excess"))
+    item.navy_status, item.navy_detail = _pays(d.navy, navy_excess, cost, restricted)
+    item.comp_status, item.comp_detail = _pays(d.comp, _excess(c.get("excess")), cost, restricted)
+    item.say = _say(item, navy_excess)
     return item
 
 
 @dataclass
 class HospitalSheet:
-    navy_only: list[HospitalItem]    # covered (or covered more fully) by Navy Health only
-    comp_only: list[HospitalItem]    # covered (or covered more fully) by theirs only
-    both: int                        # clinical categories both cover the same way
+    differing: list[HospitalItem]    # covered differently: asked-about first, then the biggest bill
+    same: list[HospitalItem]         # covered the same way by both, alphabetically
     essentials: list[Difference]
+
+    @property
+    def navy_only(self) -> list[HospitalItem]:
+        return [i for i in self.differing if i.diff.direction == NAVY_BETTER]
+
+    @property
+    def comp_only(self) -> list[HospitalItem]:
+        return [i for i in self.differing if i.diff.direction == COMP_BETTER]
+
+    @property
+    def both(self) -> int:
+        """Clinical categories both cover the same way."""
+        return sum(1 for i in self.same if i.diff.navy and i.diff.navy.rank)
 
 
 def hospital_sheet(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]], *,
                    focus: Iterable[str] = (), cfg: Optional[dict] = None,
                    costs: Optional[dict] = None) -> Optional[HospitalSheet]:
-    """The hospital side of the call sheet, or None when neither policy has hospital cover. Each
-    category covered differently comes with what it costs the member on each side: anything the rep
-    asked about first, then the biggest bill first."""
+    """The hospital side of the call sheet, or None when neither policy has hospital cover: every
+    clinical category, with what it costs the member on each side. Those covered differently come
+    first (anything the rep asked about, then the biggest bill); those covered the same follow."""
     focus = set(focus)
     n, c = vals.get(navy_id, {}), vals.get(comp_id, {})
     cats = sorted({k for k in (*n, *c) if k.startswith("cover:")},
@@ -307,14 +411,13 @@ def hospital_sheet(navy_id: int, comp_id: int, vals: dict[int, dict[str, Value]]
     if not cats:
         return None
     costs = category_costs() if costs is None else costs
-    diffs = [compare_pair(k, n.get(k), c.get(k), cfg) for k in cats]
-
-    def items(direction: str) -> list[HospitalItem]:
-        out = [_item(d, n, c, costs) for d in diffs if d.direction == direction]
-        return sorted(out, key=lambda i: (i.diff.key not in focus, -(i.private_cost or 0), i.diff.label))
+    items = [_item(compare_pair(k, n.get(k), c.get(k), cfg), n, c, costs) for k in cats]
+    differing = sorted((i for i in items if i.diff.direction in (NAVY_BETTER, COMP_BETTER)),
+                       key=lambda i: (i.diff.key not in focus, -(i.private_cost or 0), i.diff.label))
+    same = [i for i in items if i.diff.direction not in (NAVY_BETTER, COMP_BETTER)]
+    same.sort(key=lambda i: (i.diff.key not in focus, i.diff.label))
     return HospitalSheet(
-        navy_only=items(NAVY_BETTER), comp_only=items(COMP_BETTER),
-        both=sum(1 for d in diffs if d.direction == SAME and d.navy and d.navy.rank),
+        differing=differing, same=same,
         essentials=[compare_pair(k, n.get(k), c.get(k), cfg) for k in HOSPITAL_ESSENTIALS if n.get(k) or c.get(k)],
     )
 

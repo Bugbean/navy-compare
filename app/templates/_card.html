@@ -26,6 +26,31 @@
     {% if cell.wait %}<span class="x-wait">{{ cell.wait }}</span>{% endif %}
   {% endif %}
 {%- endmacro %}
+{# One clinical category, one row: Navy Health, theirs, the difference — the same shape as an extras
+   row, so "ask about anything" always lands on the same layout. The say line and the definition sit
+   in the row it opens to, not a paragraph the rep has to read past to find the figures. #}
+{% macro hospital_row(it, comp_fund, focus_categories, cat_defs, hide) -%}
+  {% set d = it.diff %}
+  <tbody class="xgroup{% if d.key in focus_categories %} focus open{% endif %}{% if hide %} x-more{% endif %}" data-cat="{{ d.key }}"{% if hide %} hidden{% endif %}>
+    <tr class="xrow dir-{{ it.direction }}">
+      <th scope="row">
+        <button type="button" class="x-open" aria-expanded="{{ 'true' if d.key in focus_categories else 'false' }}" title="Why, and what it's worth">{{ d.label }}</button>
+        {% if it.procedure %}<span class="x-sub">e.g. {{ it.procedure }}</span>{% endif %}
+      </th>
+      <td class="{{ 'x-best' if it.direction == 'navy_better' else '' }}" data-who="Navy Health">
+        <span class="x-limit">{{ it.navy_status }}</span><span class="x-sub">{{ it.navy_detail }}</span>
+      </td>
+      <td class="{{ 'x-best' if it.direction == 'comp_better' else '' }}" data-who="{{ comp_fund }}">
+        <span class="x-limit">{{ it.comp_status }}</span><span class="x-sub">{{ it.comp_detail }}</span>
+      </td>
+      <td class="x-gap">{{ it.gap }}{% if it.private_cost %} <span class="h-cost" title="{{ it.source }}">typically ${{ '{:,.0f}'.format(it.private_cost) }} {{ it.cost_words }}</span>{% endif %}</td>
+    </tr>
+    <tr class="xdetail"><td colspan="4">
+      {% if it.say %}<p class="h-say"><span class="h-say-text">“{{ it.say }}”</span> <button type="button" class="link-btn h-copy">Copy</button></p>{% endif %}
+      <p class="muted small h-about">{% if it.matters_to %}<strong>Most relevant to</strong> {{ it.matters_to }}. {% endif %}{% if d.key in cat_defs %}<strong>What it covers:</strong> {{ cat_defs[d.key] }}{% endif %}</p>
+    </td></tr>
+  </tbody>
+{%- endmacro %}
 
 {% if error %}
   <p class="error">{{ error }}</p>
@@ -68,6 +93,27 @@
         </div>
       {% endif %}
 
+      {% if loop.first %}
+        <div class="talk talk-top" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+          <h4>What to say</h4>
+          <div class="talk-text"><p class="muted small talk-wait">Writing what to say…</p></div>
+          <div class="talk-actions" hidden>
+            <button type="button" class="pill talk-copy">Copy</button>
+            <button type="button" class="link-btn talk-again">Write it again</button>
+          </div>
+        </div>
+      {% else %}
+        <div class="talk talk-top" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}" data-lazy="1">
+          <h4>What to say</h4>
+          <button type="button" class="pill talk-go">Write it</button>
+          <div class="talk-text" hidden></div>
+          <div class="talk-actions" hidden>
+            <button type="button" class="pill talk-copy">Copy</button>
+            <button type="button" class="link-btn talk-again">Write it again</button>
+          </div>
+        </div>
+      {% endif %}
+
       <div class="sheet-grid">
         <div class="sheet-main">
           {% if s.extras %}
@@ -98,42 +144,24 @@
               {% if s.extras | length > extras_rows_shown %}
                 <button type="button" class="link-btn x-show-all">Show all {{ s.extras | length }} services</button>
               {% endif %}
-              {% if s.neither %}<p class="muted small x-neither">Neither covers: {{ s.neither | join(', ') }}.</p>{% endif %}
             </div>
           {% endif %}
 
           {% if s.hospital %}{% set h = s.hospital %}
             <div class="sheet-block hospital-block">
               <h3>Hospital: what's covered</h3>
-              {% for title, items, dir in [("Navy Health covers, " ~ comp_fund ~ " doesn't", h.navy_only, "navy_better"),
-                                          (comp_fund ~ " covers, this Navy Health policy doesn't", h.comp_only, "comp_better")] %}
-                {% if items %}
-                  <h4 class="h-sec {{ dir }}">{{ title }} <span class="count">{{ items | length }}</span>
-                    <span class="muted small">biggest bills first</span></h4>
-                  <div class="h-items">
-                    {% for it in items %}{% set d = it.diff %}
-                      <div class="h-item {{ dir }}{% if d.key in focus_categories %} focus{% endif %}{% if loop.index > hospital_items_shown and d.key not in focus_categories %} h-more{% endif %}"{% if loop.index > hospital_items_shown and d.key not in focus_categories %} hidden{% endif %}>
-                        <div class="h-top">
-                          <strong>{{ d.label }}</strong>
-                          {% if it.procedure %}<span class="h-proc">e.g. {{ it.procedure }}</span>{% endif %}
-                          {% if it.private_cost %}<span class="h-cost" title="{{ it.source }}">typically ${{ '{:,.0f}'.format(it.private_cost) }} {{ it.cost_words }}</span>{% endif %}
-                        </div>
-                        <div class="h-sides">
-                          <div class="h-side {{ 'good' if dir == 'navy_better' else 'bad' }}"><span class="who">Navy Health</span>{{ it.navy_pays }}</div>
-                          <div class="h-side {{ 'good' if dir == 'comp_better' else 'bad' }}"><span class="who">{{ comp_fund }}</span>{{ it.comp_pays }}</div>
-                        </div>
-                        <p class="h-say"><span class="h-say-text">“{{ it.say }}”</span> <button type="button" class="link-btn h-copy">Copy</button></p>
-                        <p class="muted small h-about">{% if it.matters_to %}<strong>Most relevant to</strong> {{ it.matters_to }}. {% endif %}{% if d.key in cat_defs %}<strong>What it covers:</strong> {{ cat_defs[d.key] }}{% endif %}</p>
-                      </div>
-                    {% endfor %}
-                  </div>
-                  {% if items | length > hospital_items_shown %}
-                    <button type="button" class="link-btn h-show-all">Show all {{ items | length }}</button>
-                  {% endif %}
-                {% endif %}
-              {% endfor %}
-              {% if not h.navy_only and not h.comp_only %}<p class="muted small">Both cover every condition the same way.</p>
-              {% elif h.both %}<p class="muted small h-both">Both cover the other {{ h.both }} conditions the same way.</p>{% endif %}
+              <table class="xtable">
+                <thead><tr><th>Condition</th><th class="navy-col">Navy Health</th><th>{{ comp_fund }}</th><th>Difference</th></tr></thead>
+                {% for it in h.differing %}
+                  {{ hospital_row(it, comp_fund, focus_categories, cat_defs, loop.index > hospital_items_shown and it.diff.key not in focus_categories) }}
+                {% endfor %}
+                {% for it in h.same %}
+                  {{ hospital_row(it, comp_fund, focus_categories, cat_defs, true) }}
+                {% endfor %}
+              </table>
+              {% if h.same %}
+                <button type="button" class="link-btn x-show-all">Show all {{ (h.differing | length) + (h.same | length) }} conditions{% if h.both %} ({{ h.both }} covered the same way){% endif %}</button>
+              {% endif %}
               <table class="htable">
                 <thead><tr><th></th><th class="navy-col">Navy Health</th><th>{{ comp_fund }}</th></tr></thead>
                 <tbody>
@@ -149,27 +177,6 @@
         </div>
 
         <aside class="sheet-assist">
-          {% if loop.first %}
-            <div class="talk assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-              <h4>What to say</h4>
-              <div class="talk-text"><p class="muted small talk-wait">Writing what to say…</p></div>
-              <div class="talk-actions" hidden>
-                <button type="button" class="pill talk-copy">Copy</button>
-                <button type="button" class="link-btn talk-again">Write it again</button>
-              </div>
-            </div>
-          {% else %}
-            <div class="talk assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}" data-lazy="1">
-              <h4>What to say</h4>
-              <button type="button" class="pill talk-go">Write it</button>
-              <div class="talk-text" hidden></div>
-              <div class="talk-actions" hidden>
-                <button type="button" class="pill talk-copy">Copy</button>
-                <button type="button" class="link-btn talk-again">Write it again</button>
-              </div>
-            </div>
-          {% endif %}
-
           {% if s.extras %}
             <div class="estimator assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
               <h4>What would they get back?</h4>

@@ -79,7 +79,7 @@ MAX_OBJECTION_CHARS = 300
 MAX_POLICIES = 10
 MAX_CARDS = 6
 EXTRAS_ROWS_SHOWN = 8   # the rest of the extras services are one click away
-HOSPITAL_ITEMS_SHOWN = 4  # per side; the biggest bills, and anything asked about, always show
+HOSPITAL_ITEMS_SHOWN = 8  # conditions covered differently; those covered the same are one click away too
 MAX_USAGE_CHARS = 400
 MAX_REQUEST_CHARS = 500
 REAL_STATES = [s for s in STATES if s != "ALL"]

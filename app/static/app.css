@@ -290,8 +290,14 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
                 border-radius: 4px 4px 24px 4px; padding: .7rem .85rem; }
 .assist-block h4 { font-size: .9rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; margin-bottom: .5rem; }
 
-/* Extras: one row per service, the limit large, what a visit pays and the wait beneath it. */
-.xtable { width: 100%; border-collapse: collapse; font-size: .86rem; table-layout: fixed; }
+/* What to say sits full width, above the comparison: the one thing read out loud, first. */
+.talk-top { margin: .9rem 1.15rem 0; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--yellow);
+            border-radius: 4px 4px 24px 4px; padding: .8rem .9rem; }
+.talk-top h4 { font-size: .9rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; margin-bottom: .5rem; }
+
+/* The row table: one row per benefit — label, Navy Health, theirs, the difference — shared by the
+   extras table and the hospital table, so "ask about anything" always lands on the same shape. */
+.xtable { width: 100%; border-collapse: collapse; font-size: .86rem; table-layout: fixed; margin-top: .3rem; }
 .xtable > thead th { text-transform: none; letter-spacing: 0; font-size: .75rem; padding: 6px 8px; white-space: normal; }
 .xtable > thead th:first-child { width: 22%; }
 .xtable > thead th:last-child { width: 20%; }
@@ -299,6 +305,7 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .xrow > th, .xrow > td { padding: 7px 8px; vertical-align: top; border-bottom: 1px solid var(--border); white-space: normal; text-align: left; }
 .xtable tr:hover td { background: none; }
 .xrow td span { display: block; }
+.xrow th .x-sub { display: block; font-weight: 400; }
 .x-limit { font-weight: 600; color: var(--accent); }
 .x-sub { font-size: .76rem; color: var(--muted); }
 .x-wait { font-size: .74rem; color: var(--wait-text); }
@@ -308,6 +315,9 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .dir-navy_better .x-gap { color: var(--green); }
 .dir-comp_better .x-gap { color: var(--neg-text); }
 .dir-same .x-gap, .dir-different .x-gap, .dir-trade_off .x-gap { color: var(--muted); font-weight: 400; }
+/* A difference too small to score still gets said, never folded into "Same" - just in a quieter,
+   warm colour so it reads as "worth a mention", not "pick this one". */
+.dir-minor .x-gap { color: var(--wait-text); font-weight: 600; }
 .x-open { background: none; border: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-align: left; padding: 0; }
 .x-open::before { content: "▸ "; color: var(--muted); }
 .xgroup.open .x-open::before { content: "▾ "; }
@@ -323,8 +333,17 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
 .xitems td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: normal; }
 .xitems tr:last-child td { border-bottom: none; }
 .xitems tr.navy_better td:nth-child(2), .xitems tr.comp_better td:nth-child(3) { color: var(--green); font-weight: 600; }
-/* On a phone the four columns are too narrow to read: each service becomes a small card, the two
-   sides next to each other and the gap beneath. */
+/* The line the rep reads out, and what the row is worth to sell it, inside the row it opens to. */
+.h-cost { font-family: var(--font-head); font-weight: 700; font-size: .84rem; white-space: nowrap;
+          background: var(--cream); color: var(--text); padding: 0 .4rem; border-radius: 4px; }
+.h-say { margin-top: .5rem; font-size: .9rem; line-height: 1.5; padding: .45rem .65rem; border-left: 4px solid var(--accent);
+         background: var(--tint-sky); border-radius: 4px 4px 14px 4px; }
+.h-say .link-btn { margin-left: .3rem; }
+.h-about { margin-top: .35rem; }
+.count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 999px; font-size: .75rem; padding: 0 6px;
+         background: var(--yellow); color: var(--navy); font-family: var(--font-body); font-weight: 600; }
+/* On a phone the four columns are too narrow to read: each row becomes a small card, the two sides
+   next to each other and the gap beneath. */
 @media (max-width: 640px) {
   .xtable, .xtable > tbody { display: block; }
   .xtable > thead { display: none; }
@@ -339,39 +358,8 @@ kbd { display: inline-block; min-width: 1.2rem; padding: 0 4px; border: 1px soli
   .xdetail > td { display: block; }
 }
 .x-show-all { margin-top: .5rem; }
-.x-neither { margin-top: .4rem; }
 
-/* Hospital: each condition one side covers and the other doesn't, with what it costs the member on
-   each side, the public wait, and a line to read out. Then what applies to every admission. */
-.h-sec { font-size: .95rem; font-weight: 700; margin: .8rem 0 .5rem; }
-.h-sec.navy_better { color: var(--green); }
-.h-sec.comp_better { color: var(--neg-text); }
-.h-sec .muted { font-weight: 400; margin-left: .3rem; }
-.h-items { display: flex; flex-direction: column; gap: .55rem; }
-.h-item { border-radius: 6px 6px 22px 6px; padding: .65rem .8rem; background: var(--surface); border: 1px solid var(--border);
-          border-left: 5px solid var(--border); }
-.h-item.navy_better { border-left-color: var(--green); }
-.h-item.comp_better { border-left-color: var(--red); }
-.h-item.focus { box-shadow: 0 0 0 2px var(--accent); }
-.h-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .6rem; margin-bottom: .45rem; }
-.h-top strong { font-family: var(--font-head); font-size: 1.02rem; font-weight: 700; color: var(--accent); }
-.h-proc { font-size: .8rem; color: var(--muted); }
-.h-cost { margin-left: auto; font-family: var(--font-head); font-weight: 700; font-size: 1rem; white-space: nowrap;
-          background: var(--cream); color: var(--text); padding: 0 .5rem; border-radius: 4px; }
-.h-sides { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
-@media (max-width: 640px) { .h-sides { grid-template-columns: 1fr; } .h-cost { margin-left: 0; } }
-.h-side { border-radius: 6px; padding: .4rem .55rem; font-size: .84rem; line-height: 1.4; }
-.h-side .who { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 1px; }
-.h-side.good { background: var(--tint-good); }
-.h-side.bad { background: var(--tint-bad); }
-.h-say { margin-top: .5rem; font-size: .9rem; line-height: 1.5; padding: .45rem .65rem; border-left: 4px solid var(--accent);
-         background: var(--tint-sky); border-radius: 4px 4px 14px 4px; }
-.h-say .link-btn { margin-left: .3rem; }
-.h-about { margin-top: .35rem; }
-.h-show-all { margin-top: .4rem; }
-.h-both { margin-top: .6rem; }
-.count { display: inline-block; min-width: 1.4rem; text-align: center; border-radius: 999px; font-size: .75rem; padding: 0 6px;
-         background: var(--yellow); color: var(--navy); font-family: var(--font-body); font-weight: 600; }
+/* What applies to every admission (excess, waits, ambulance...), not any one condition. */
 .htable { margin-top: .6rem; font-size: .84rem; table-layout: fixed; }
 .htable th, .htable td { white-space: normal; padding: 5px 8px; text-transform: none; letter-spacing: 0; }
 .htable thead th { font-size: .75rem; }

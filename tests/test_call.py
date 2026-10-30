@@ -112,7 +112,7 @@ def test_the_card_for_a_real_pair_puts_decisive_cover_first(client):
     r = client.get("/card?ids=2789,115&state=NSW&family=couple")
     html = r.data.decode()
     assert r.status_code == 200
-    assert "Navy Health covers, " in html and "Back, neck and spine" in html
+    assert "Back, neck and spine" in html and ('Navy Health only' in html or 'Minor' in html)
     assert "$278.08 a month" in html and "at $750 excess" in html
     assert "a year" in html and 'class="sheet-gap' in html     # the price gap, said a year as well as a month
 
@@ -278,7 +278,7 @@ def test_a_clinical_category_difference_shows_what_it_covers_not_a_restated_verd
             excess_options=[], followups=[], auto=None, meta={}, comp_only=False, cat_defs=call.CAT_DEFS,
             focus_categories=set(), extras_rows_shown=call.EXTRAS_ROWS_SHOWN,
             hospital_items_shown=call.HOSPITAL_ITEMS_SHOWN)
-    assert "Navy Health covers, HCF doesn" in html and "Bone, joint and muscle" in html
+    assert "Bone, joint and muscle" in html and "Navy Health only" in html
     assert "Injuries and diseases of the musculoskeletal system" in html
     # The Covered/Not covered values already say which side has it; nothing should restate that as a
     # separate sentence ("Not covered with HCF: ...").

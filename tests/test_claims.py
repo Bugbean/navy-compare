@@ -91,10 +91,50 @@ def test_rows_follow_the_order_members_claim_with_what_the_rep_asked_about_first
     assert rows[0].focus and not rows[1].focus
 
 
-def test_a_service_neither_covers_is_listed_once_not_given_a_row():
-    rows, neither = cl.extras_sheet(1, 2, {1: _service("HomeNursing", covered=False),
-                                           2: _service("HomeNursing", covered=False)})
-    assert rows == [] and neither == ["Home nursing"]
+def test_a_service_neither_covers_comes_last_so_everything_can_be_shown_side_by_side():
+    navy = {**_service("HomeNursing", covered=False), **_service("Optical")}
+    comp = {**_service("HomeNursing", covered=False), **_service("Optical")}
+    rows, neither = cl.extras_sheet(1, 2, {1: navy, 2: comp})
+    assert [r.service for r in rows] == ["Optical", "HomeNursing"] and neither == ["Home nursing"]
+    assert rows[1].gap == "Neither covers it" and rows[1].direction == "same"
+
+
+def _pair(key, kind, navy, comp, basis="dollars"):
+    """A Difference between two values of one benefit, as the card scores it."""
+    def v(x):
+        display, size = x
+        return Value(key, kind, display, size if kind != "premium" else -size, size, basis)
+    return compare_pair(key, v(navy), v(comp))
+
+
+def test_a_difference_too_small_to_score_is_said_as_minor_never_as_the_same():
+    d = _pair("item:DentalGeneral012PeriodicExam", "extras_item", ("$47.50", 47.5), ("$45", 45.0))
+    assert d.direction == "same"                     # below the card's noise threshold...
+    assert cl.gap_words(d) == ("minor", "Minor: Navy Health pays $2.50 more")   # ...but still said
+
+
+def test_differences_are_said_in_the_terms_of_the_benefit():
+    assert cl.gap_words(_pair("limit:Optical", "extras_limit", ("$350", 350.0), ("$180", 180.0)))[1] \
+        == "Navy Health: $170 more a year"
+    assert cl.gap_words(_pair("price", "premium", ("$300 a month", 300.0), ("$340 a month", 340.0)))[1] \
+        == "Navy Health: $40 a month cheaper"
+    same = _pair("limit:Optical", "extras_limit", ("$350", 350.0), ("$350", 350.0))
+    assert cl.gap_words(same) == ("same", "Same")
+
+
+def test_a_service_covered_by_both_with_different_waits_says_whose_wait_is_shorter():
+    navy = Value("extras:Optical", "extras_service", "Covered, 6 month wait", 1.0, None, wait=6.0)
+    comp = Value("extras:Optical", "extras_service", "Covered, 2 month wait", 1.0, None, wait=2.0)
+    assert cl.gap_words(compare_pair("extras:Optical", navy, comp)) == ("comp_better", "Theirs: 4 months shorter wait")
+
+
+def test_hospital_rows_cover_every_category_with_the_same_ones_said_as_same():
+    h = cl.hospital_sheet(1, 2, _hospital_vals(), costs=COSTS)
+    assert [i.diff.key for i in h.differing] == ["cover:Psychiatric", "cover:BoneJointMuscle"]   # biggest bill first
+    assert [(i.diff.key, i.gap) for i in h.same] == [("cover:HeartVascular", "Same: both cover it")]
+    it = h.differing[1]
+    assert (it.navy_status, it.comp_status, it.gap) == ("Covered", "Not covered", "Navy Health only")
+    assert h.same[0].say == ""                       # nothing to sell where they are the same
 
 
 def test_a_hospital_only_pair_has_no_extras_rows():

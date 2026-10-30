@@ -714,12 +714,7 @@
       b.setAttribute("aria-expanded", String(group.classList.toggle("open")));
     }));
     $$(".x-show-all", result).forEach((b) => b.addEventListener("click", () => {
-      $$(".x-more", b.closest(".extras-block")).forEach((g) => { g.hidden = false; });
-      b.remove();
-    }));
-    $$(".h-show-all", result).forEach((b) => b.addEventListener("click", () => {
-      const el = b.previousElementSibling;   // the .h-items this button follows
-      if (el) $$(".h-more", el).forEach((it) => { it.hidden = false; });
+      $$(".x-more", b.closest(".sheet-block")).forEach((g) => { g.hidden = false; });
       b.remove();
     }));
     $$(".h-copy", result).forEach((b) => b.addEventListener("click", () => {
