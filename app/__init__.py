@@ -114,7 +114,9 @@ def create_app() -> Flask:
     def _demo_gate():
         # A throwaway password in front of a test deploy — separate from the
         # real per-person accounts below, which still apply after this.
-        if not demo_password:
+        # /healthz stays open: Render's own health check hits it with no
+        # credentials, and a 401 there would get the service restarted.
+        if not demo_password or request.path == "/healthz":
             return None
         creds = request.authorization
         if not creds or not secrets.compare_digest(creds.password or "", demo_password):

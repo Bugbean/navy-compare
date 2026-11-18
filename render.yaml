@@ -5,6 +5,8 @@ services:
     dockerfilePath: ./deploy/Dockerfile
     dockerContext: .
     plan: starter
+    region: singapore
+    healthCheckPath: /healthz
     envVars:
       - key: DEMO_PASSWORD
         value: Demo2026
