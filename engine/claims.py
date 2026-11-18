@@ -291,6 +291,7 @@ class HospitalItem:
     direction: str = SAME            # the difference's direction (gap_words)
     gap: str = ""                    # the difference in plain words: "Navy Health only", "Same"
     procedure: str = ""              # its most common procedure, in plain words
+    examples: str = ""               # a handful of conditions or procedures it covers, comma-separated
     private_cost: Optional[float] = None
     cost_words: str = "privately"    # what the figure is, where it is not a private bill (a device's price)
     wait: str = ""                   # the median public wait, in words
@@ -304,11 +305,11 @@ class HospitalItem:
 
     @property
     def navy_pays(self) -> str:
-        return f"{self.navy_status}: {self.navy_detail}"
+        return f"{self.navy_status}: {self.navy_detail}" if self.navy_detail else self.navy_status
 
     @property
     def comp_pays(self) -> str:
-        return f"{self.comp_status}: {self.comp_detail}"
+        return f"{self.comp_status}: {self.comp_detail}" if self.comp_detail else self.comp_status
 
 
 def _excess(v: Optional[Value]) -> Optional[float]:
@@ -319,10 +320,8 @@ def _pays(v: Optional[Value], excess: Optional[float], cost: dict, restricted: d
     """(status, what the member pays) for this category on one policy."""
     words = f" {cost['cost_words']}" if cost.get("cost_words") else ""
     price = f" (typically {_money(cost['private_cost'])}{words})" if cost.get("private_cost") else ""
-    wait = _wait_words(cost.get("public_wait_days"))
-    public = f", or waits {wait} as a public patient" if wait else ", or goes on the public waiting list"
     if v is None or not v.rank:
-        return "Not covered", f"pays the whole private bill{price}{public}"
+        return "Not covered", ""
     if v.rank < 2:
         rate = ""
         if restricted.get("default_per_night"):
@@ -332,8 +331,7 @@ def _pays(v: Optional[Value], excess: Optional[float], cost: dict, restricted: d
         return "Restricted", f"paid only at the public-hospital rate{rate}, so most of a private bill{price} is left to pay"
     if excess is None:
         return "Covered", "as a private patient"
-    return "Covered", ("no excess to pay" if excess == 0 else f"pays the {_money(excess)} excess") + \
-        ", plus any doctors' gap"
+    return "Covered", ("no excess" if excess == 0 else f"{_money(excess)} excess") + ", plus any doctors' gap"
 
 
 def _say(item: HospitalItem, navy_excess: Optional[float]) -> str:
@@ -367,6 +365,7 @@ def _item(d: Difference, n: dict[str, Value], c: dict[str, Value], costs: dict) 
         gap = "Same: both cover it" if d.navy and d.navy.rank == 2 else (
             "Same: neither covers it" if not (d.navy and d.navy.rank) else "Same: both restricted")
     item = HospitalItem(diff=d, direction=direction, gap=gap, procedure=cost.get("procedure") or "",
+                        examples=cost.get("examples") or "",
                         private_cost=float(cost["private_cost"]) if cost.get("private_cost") else None,
                         cost_words=cost.get("cost_words") or "privately",
                         wait=_wait_words(cost.get("public_wait_days")), matters_to=cost.get("matters_to") or "",

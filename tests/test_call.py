@@ -283,8 +283,9 @@ def test_a_clinical_category_difference_shows_what_it_covers_not_a_restated_verd
     # The Covered/Not covered values already say which side has it; nothing should restate that as a
     # separate sentence ("Not covered with HCF: ...").
     assert "Not covered with" not in html
-    # ...but it does say what the difference is worth: the typical cost and the public wait.
-    assert "typically $" in html and "public patient" in html
+    # ...but it does say what the difference is worth: the typical cost, and (in the line the rep
+    # reads out) the public wait the member faces without it.
+    assert "typically $" in html and "in the public system" in html
 
 
 def _stub_pack():
@@ -304,7 +305,7 @@ def test_an_objection_with_no_preset_and_no_text_is_refused(offline):
 def test_an_objection_uses_its_own_prompt_and_the_stated_question(offline, monkeypatch):
     import app.call as call
     from ai.compose import ComposeResult
-    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id, full=False: (_stub_pack(), None))
     seen = {}
 
     def fake_compose(pack, *, client, system, question, context, **kw):
@@ -324,7 +325,7 @@ def test_an_objection_uses_its_own_prompt_and_the_stated_question(offline, monke
 def test_an_objection_takes_free_text_over_an_unknown_preset(offline, monkeypatch):
     import app.call as call
     from ai.compose import ComposeResult
-    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id, full=False: (_stub_pack(), None))
     seen = {}
 
     def fake_compose(pack, *, question, **kw):
@@ -339,7 +340,7 @@ def test_an_objection_takes_free_text_over_an_unknown_preset(offline, monkeypatc
 def test_an_objection_is_capped_in_length(offline, monkeypatch):
     import app.call as call
     from ai.compose import ComposeResult
-    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id: (_stub_pack(), None))
+    monkeypatch.setattr(call, "_talk_pack", lambda sel, navy_id, comp_id, full=False: (_stub_pack(), None))
     seen = {}
 
     def fake_compose(pack, *, question, **kw):

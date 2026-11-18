@@ -35,19 +35,22 @@
     <tr class="xrow dir-{{ it.direction }}">
       <th scope="row">
         <button type="button" class="x-open" aria-expanded="{{ 'true' if d.key in focus_categories else 'false' }}" title="Why, and what it's worth">{{ d.label }}</button>
-        {% if it.procedure %}<span class="x-sub">e.g. {{ it.procedure }}</span>{% endif %}
       </th>
       <td class="{{ 'x-best' if it.direction == 'navy_better' else '' }}" data-who="Navy Health">
-        <span class="x-limit">{{ it.navy_status }}</span><span class="x-sub">{{ it.navy_detail }}</span>
+        <span class="x-limit">{{ it.navy_status }}</span>{% if it.navy_detail %}<span class="x-sub">{{ it.navy_detail }}</span>{% endif %}
       </td>
       <td class="{{ 'x-best' if it.direction == 'comp_better' else '' }}" data-who="{{ comp_fund }}">
-        <span class="x-limit">{{ it.comp_status }}</span><span class="x-sub">{{ it.comp_detail }}</span>
+        <span class="x-limit">{{ it.comp_status }}</span>{% if it.comp_detail %}<span class="x-sub">{{ it.comp_detail }}</span>{% endif %}
       </td>
-      <td class="x-gap">{{ it.gap }}{% if it.private_cost %} <span class="h-cost" title="{{ it.source }}">typically ${{ '{:,.0f}'.format(it.private_cost) }} {{ it.cost_words }}</span>{% endif %}</td>
+      <td class="x-gap">
+        <span class="x-gap-line">{{ it.gap }}</span>
+        {% if d.key in cat_defs %}<span class="x-def">{{ cat_defs[d.key] }}{% if it.examples %} Covers {{ it.examples }}.{% endif %}</span>{% endif %}
+        {% if it.private_cost %}<span class="h-cost" title="{{ it.source }}">typically ${{ '{:,.0f}'.format(it.private_cost) }} {{ it.cost_words }}</span>{% endif %}
+      </td>
     </tr>
     <tr class="xdetail"><td colspan="4">
       {% if it.say %}<p class="h-say"><span class="h-say-text">“{{ it.say }}”</span> <button type="button" class="link-btn h-copy">Copy</button></p>{% endif %}
-      <p class="muted small h-about">{% if it.matters_to %}<strong>Most relevant to</strong> {{ it.matters_to }}. {% endif %}{% if d.key in cat_defs %}<strong>What it covers:</strong> {{ cat_defs[d.key] }}{% endif %}</p>
+      {% if it.matters_to %}<p class="muted small h-about"><strong>Most relevant to</strong> {{ it.matters_to }}.</p>{% endif %}
     </td></tr>
   </tbody>
 {%- endmacro %}
@@ -62,6 +65,9 @@
   {% endif %}
   {% if comp_only %}
     <p class="warn">There is no Navy Health policy with a rate for this household in {{ state }} to compare with. Name one in the bar to compare anyway.</p>
+  {% endif %}
+  {% if focus_service_label %}
+    <p class="warn">Neither policy shown here includes extras cover, so {{ focus_service_label }} is not part of either one — there is nothing to compare for it.</p>
   {% endif %}
 
   {% for s in shown %}{% set c = s.card %}{% set comp_fund = by_id[c.comp_id].fund_name %}
@@ -86,6 +92,39 @@
           {% if c.price and c.price.comp %}<span class="sheet-price">{{ c.price.comp.display }}</span><span class="muted small">{{ c.price.comp.note }}</span>{% endif %}
         </div>
       </header>
+
+      <div class="assist-bar">
+        <button type="button" class="assist-fab" aria-expanded="false" aria-controls="assist-{{ c.navy_id }}-{{ c.comp_id }}">
+          Estimate &amp; pushback <span class="assist-fab-icon">▾</span>
+        </button>
+        <aside class="sheet-assist" id="assist-{{ c.navy_id }}-{{ c.comp_id }}">
+          {% if s.extras %}
+            <div class="estimator assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+              <h4>What would they get back?</h4>
+              <div class="est-ask">
+                <input type="text" class="est-text" maxlength="400" placeholder="How do they use extras? “check-ups for both of us, she wears glasses, weekly physio”">
+                <button type="button" class="pill est-read">Work it out</button>
+              </div>
+              <div class="est-quick"></div>
+              <div class="est-lines"></div>
+              <div class="est-result"></div>
+            </div>
+          {% endif %}
+
+          <div class="objections assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
+            <h4>Handle pushback</h4>
+            <div class="objection-presets">
+              {% if 'price' in s.objections %}<button type="button" class="pill objection-preset" data-preset="price">“Theirs is cheaper”</button>{% endif %}
+              {% if 'losing' in s.objections %}<button type="button" class="pill objection-preset" data-preset="losing">“What am I losing?”</button>{% endif %}
+            </div>
+            <div class="objection-form">
+              <input type="text" class="objection-input" maxlength="300" placeholder="Or type what they actually said…">
+              <button type="button" class="pill objection-ask">Ask</button>
+            </div>
+            <div class="objection-log"></div>
+          </div>
+        </aside>
+      </div>
 
       {% if s.answers %}
         <div class="direct-answer">
@@ -156,7 +195,7 @@
                   {{ hospital_row(it, comp_fund, focus_categories, cat_defs, loop.index > hospital_items_shown and it.diff.key not in focus_categories) }}
                 {% endfor %}
                 {% for it in h.same %}
-                  {{ hospital_row(it, comp_fund, focus_categories, cat_defs, true) }}
+                  {{ hospital_row(it, comp_fund, focus_categories, cat_defs, it.diff.key not in focus_categories) }}
                 {% endfor %}
               </table>
               {% if h.same %}
@@ -175,34 +214,6 @@
             </div>
           {% endif %}
         </div>
-
-        <aside class="sheet-assist">
-          {% if s.extras %}
-            <div class="estimator assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-              <h4>What would they get back?</h4>
-              <div class="est-ask">
-                <input type="text" class="est-text" maxlength="400" placeholder="How do they use extras? “check-ups for both of us, she wears glasses, weekly physio”">
-                <button type="button" class="pill est-read">Work it out</button>
-              </div>
-              <div class="est-quick"></div>
-              <div class="est-lines"></div>
-              <div class="est-result"></div>
-            </div>
-          {% endif %}
-
-          <div class="objections assist-block" data-navy="{{ c.navy_id }}" data-comp="{{ c.comp_id }}">
-            <h4>Handle pushback</h4>
-            <div class="objection-presets">
-              {% if 'price' in s.objections %}<button type="button" class="pill objection-preset" data-preset="price">“Theirs is cheaper”</button>{% endif %}
-              {% if 'losing' in s.objections %}<button type="button" class="pill objection-preset" data-preset="losing">“What am I losing?”</button>{% endif %}
-            </div>
-            <div class="objection-form">
-              <input type="text" class="objection-input" maxlength="300" placeholder="Or type what they actually said…">
-              <button type="button" class="pill objection-ask">Ask</button>
-            </div>
-            <div class="objection-log"></div>
-          </div>
-        </aside>
       </div>
     </section>
   {% endfor %}

@@ -27,6 +27,10 @@
     notice = $("#notice"), result = $("#result"), thinking = $("#thinking"), dock = $(".chat-dock");
   const MAX_POLICIES = 10;
   const QUESTION_WORDS = new Set(["what", "whats", "is", "does", "do", "how", "which", "can", "are"]);
+  // Once a comparison is up, the same bar still takes free text — swap the placeholder so that is
+  // obvious, instead of leaving the policy-naming example up as if that is all it does now.
+  const START_PLACEHOLDER = bar.placeholder;
+  const FOLLOW_UP_PLACEHOLDER = "Ask about anything: “what about physio?”, “dental”, “ambulance”, “add medibank”, “cheaper option?”";
 
   // The dock (the sentence, any question, and the bar) is fixed to the bottom of the screen like a
   // chat composer, so the content above always has enough bottom padding to clear it, even as a
@@ -47,6 +51,10 @@
     family: "couple", familyFrom: "assumed",
     needs: new Set(), focus: [], excess: null, showAll: false,
     questions: [],                 // unresolved references waiting on the rep
+    // Bundles the rep has built in the panel below the sentence: a hospital policy (or any policy)
+    // plus any number of extras policies, on one side, priced and compared as one product. Each
+    // entry is [leaderId, ...extraIds], all ids real and all already in S.navy or S.comp.
+    groups: [],
   };
   try {
     const saved = JSON.parse(localStorage.getItem("nc.household") || "{}");
@@ -394,7 +402,11 @@
     const preview = live ? live.refs.filter((r) => r.policy && !S.comp.concat(S.navy).some((x) => x.id === r.policy.id)) : [];
     const comps = S.comp.map((p) => chip(esc(p.name), "tok-policy", `data-id="${p.id}"`, true))
       .concat(preview.filter((r) => !r.policy.navy).map((r) => chip(esc(r.policy.name), "tok-policy tok-preview", "", false)));
-    const navs = S.navy.map((p) => chip(esc(p.name), "tok-policy tok-navy", `data-id="${p.id}"`, true))
+    // A hospital or combined Navy chip can be swapped for a different one from a list (click the
+    // chip itself, not its ×) — an extras chip in the bundle has no "which one" to switch, so it
+    // stays a plain removable chip.
+    const navs = S.navy.map((p) => chip(esc(p.name), "tok-policy tok-navy" + (p.type !== "extras" ? " tok-menu" : ""),
+        `data-id="${p.id}"${p.type !== "extras" ? ' data-menu="navy"' : ""}`, true))
       .concat(preview.filter((r) => r.policy.navy).map((r) => chip(esc(r.policy.name), "tok-policy tok-navy tok-preview")));
     const pendingQ = (live ? live.refs.filter((r) => !r.policy) : []).concat(S.questions);
     pendingQ.forEach((r) => comps.push(chip(`“${esc(r.text)}”?`, "tok-ask", "")));
@@ -403,6 +415,7 @@
       sentence.innerHTML = live && live.ignored.length
         ? `<span class="muted small">Not recognised yet: ${live.ignored.map(esc).join(", ")}</span>` : "";
       renderQuestion();
+      renderBundlePanel();
       return;
     }
     if (!comps.length && !navs.length && !pendingQ.length && !S.autoNavy) {
@@ -416,12 +429,13 @@
         if (t.dataset.need) { S.needs.delete(t.dataset.need); renderSentence(); compare(true); }
       }));
       renderQuestion();
+      renderBundlePanel();
       return;
     }
     if (comps.length) parts.push(`Comparing ${comps.join(" ")}`);
     if (navs.length) parts.push(`${comps.length ? "with" : "Comparing"} ${navs.join(" ")}`);
     else if (S.autoNavy && S.comp.length) {
-      parts.push(`with ${chip(`${esc(S.autoNavy.name)} <span class="best">best match ▾</span>`, "tok-policy tok-navy tok-auto", 'data-menu="navy"')}`);
+      parts.push(`with ${chip(`${esc(S.autoNavy.name)} <span class="best">best match ▾</span>`, "tok-policy tok-navy tok-auto", `data-menu="navy" data-id="${S.autoNavy.id}"`)}`);
     }
     const st = live && live.state ? live.state : S.state;
     const fam = live && live.family ? live.family : S.family;
@@ -443,6 +457,7 @@
     }));
     $$(".tok[data-menu]", sentence).forEach((t) => t.addEventListener("click", (e) => { if (!e.target.classList.contains("x")) openMenu(t); }));
     renderQuestion();
+    renderBundlePanel();
   }
 
   // ── small menus on the sentence ──────────────────────────────────────────────
@@ -451,31 +466,202 @@
   function openMenu(anchor) {
     closeMenu();
     const kind = anchor.dataset.menu;
+    if (kind === "navy") { openNavyMenu(anchor); return; }
     let items = [];
     if (kind === "state") items = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"].map((s) => ({ label: s, run: () => { S.state = s; S.stateFrom = "chosen"; remember(); } }));
     if (kind === "family") items = [["single", "Single"], ["couple", "Couple"], ["family", "Family"], ["single_parent", "Single parent"], ["dependants_only", "Dependants only"]]
       .map(([v, l]) => ({ label: l, run: () => { S.family = v; S.familyFrom = "chosen"; remember(); } }));
     if (kind === "need") items = IX.chips.filter((c) => !S.needs.has(c.key)).map((c) => ({ label: c.label, run: () => { S.needs.add(c.key); S.focus = (IX.chipTags[c.key] || []).slice(); } }));
-    if (kind === "navy") {
-      items = S.alternatives.map((a) => ({ label: `${a.name}`, sub: `${Math.round(a.score * 100)}% cover match`, run: () => setNavy(a.id) }))
-        .concat(S.cheaper.map((c) => ({ label: c.name, sub: `cheaper: $${c.premium.toFixed(2)} a month`, run: () => setNavy(c.id) })))
-        .concat([{ label: "Type a Navy Health policy…", run: () => { bar.value = "our "; bar.focus(); onInput(); } }]);
-    }
     menu = document.createElement("div");
     menu.className = "menu";
     menu.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}">${esc(it.label)}${it.sub ? ` <span class="muted small">${esc(it.sub)}</span>` : ""}</button>`).join("");
-    menu.style.visibility = "hidden";
-    document.body.appendChild(menu);
-    const r = anchor.getBoundingClientRect();
-    // The sentence lives in the bottom dock, so there is rarely room below the chip: open upward
-    // whenever the menu would otherwise run past the bottom of the screen.
-    const below = r.bottom + 4 + menu.offsetHeight <= window.innerHeight;
-    menu.style.left = `${r.left + window.scrollX}px`;
-    menu.style.top = below ? `${r.bottom + window.scrollY + 4}px` : `${r.top + window.scrollY - menu.offsetHeight - 4}px`;
-    menu.style.visibility = "";
-    $$("button", menu).forEach((b) => b.addEventListener("click", () => { items[Number(b.dataset.i)].run(); closeMenu(); renderSentence(); compare(true); }));
+    positionMenu(menu, anchor);
+    $$("button", menu).forEach((b) => b.addEventListener("click", () => { items[Number(b.dataset.i)].run(); closeMenu(); renderSentence(); compare(true, kind === "need"); }));
   }
-  document.addEventListener("click", (e) => { if (menu && !menu.contains(e.target) && !e.target.closest(".tok[data-menu]")) closeMenu(); });
+  // Swapping the Navy Health policy a card uses — the chip's own ▾, not the bottom bar: a full,
+  // searchable list of every Navy hospital/combined policy, the closest-match and cheaper ones
+  // called out first, since "click and get a short list" beats "click and have to go type a name".
+  function switchNavyPolicy(oldId, newId) {
+    const p = IX.byId.get(newId);
+    if (!p) return;
+    const i = oldId == null ? -1 : S.navy.findIndex((x) => x.id === oldId);
+    if (i === -1) { setNavy(newId); return; }
+    if (S.navy.some((x) => x.id === newId)) S.navy.splice(i, 1);   // already in the bundle elsewhere
+    else S.navy[i] = p;
+    S.groups.forEach((g) => { if (g[0] === oldId) g[0] = newId; });   // its attached extras follow it
+    S.autoNavy = null;
+  }
+  // A pickable list for a (possibly long) set of candidate policies — a hospital/hundreds-of-extras
+  // problem in one fund list is overwhelming on its own. When there are enough candidates to be
+  // genuinely hard to scan, a qualifying question goes on top first — the same "which attribute
+  // best splits them" logic the typed-name flow already asks with ("Corporate cover or standard?",
+  // "Which tier?") — so picking from a list is "answer one question, then see six names" rather
+  // than "scroll past eighty." A text filter is always there too, under or instead of the question,
+  // for a rep who'd rather just type. `sections` is `[{label, items: [{id, name, sub}]}]`;
+  // `onPick(id)` runs when a policy is chosen.
+  function buildPickList(sections, onPick) {
+    const all = sections.flatMap((s) => s.items);
+    const optionHtml = (o) => `<button type="button" data-id="${o.id}">${esc(o.name)}${o.sub ? ` <span class="muted small">${esc(o.sub)}</span>` : ""}</button>`;
+    const q = all.length > 8 ? splitQuestion(all.map((o) => IX.byId.get(o.id)).filter(Boolean)) : null;
+    const qualify = q && q.total > 3 ? q : null;   // the un-splittable fallback ("Which one?") would
+    const wrap = document.createElement("div");    // just repeat the list below it — skip it then
+    wrap.className = "menu bundle-menu";
+    wrap.innerHTML = `
+      ${qualify ? `<div class="menu-qualify"><div class="hdr">${esc(qualify.ask)}</div>
+        ${qualify.options.map((o) => `<button type="button" class="qualify-opt" data-ids="${o.ids.join(",")}">${esc(o.label)}
+          <span class="muted small">${esc(o.sub || "")}</span></button>`).join("")}</div>` : ""}
+      <input type="text" class="bundle-menu-filter" placeholder="${qualify ? "Or type to search…" : "Find a policy…"}">
+      <div class="bundle-menu-list">${sections.map((s) => (s.items.length
+        ? `<div class="hdr">${esc(s.label)}</div>${s.items.map(optionHtml).join("")}` : "")).join("")}</div>`;
+    const list = $(".bundle-menu-list", wrap), filter = $(".bundle-menu-filter", wrap);
+    let within = null;   // the id set the qualifying question narrowed to, if any
+    const applyFilter = () => {
+      const typed = words(filter.value);
+      $$("button", list).forEach((b) => {
+        const id = Number(b.dataset.id);
+        const textOk = !typed.length || typed.every((t) => tokenScore(t, IX.byId.get(id)) > 0);
+        b.hidden = !textOk || (within && !within.has(id));
+      });
+      $$(".hdr", list).forEach((h) => {
+        let el = h.nextElementSibling, any = false;
+        while (el && !el.classList.contains("hdr")) { if (!el.hidden) any = true; el = el.nextElementSibling; }
+        h.hidden = !any;
+      });
+    };
+    filter.addEventListener("input", applyFilter);
+    $$(".qualify-opt", wrap).forEach((b) => b.addEventListener("click", () => {
+      within = new Set(b.dataset.ids.split(",").map(Number));
+      $(".menu-qualify", wrap).remove();
+      applyFilter();
+      filter.focus();
+    }));
+    $$("button", list).forEach((b) => b.addEventListener("click", () => onPick(Number(b.dataset.id))));
+    return { el: wrap, focus: () => filter.focus() };
+  }
+  function openNavyMenu(anchor) {
+    const oldId = anchor.dataset.id ? Number(anchor.dataset.id) : null;
+    const suggested = S.alternatives.map((a) => ({ id: a.id, name: a.name, sub: `${Math.round(a.score * 100)}% cover match` }))
+      .concat(S.cheaper.map((c) => ({ id: c.id, name: c.name, sub: `cheaper: $${c.premium.toFixed(2)} a month` })));
+    const shown = new Set([oldId, ...suggested.map((s) => s.id)]);
+    const rest = IX.policies.filter((p) => p.navy && p.type !== "extras" && !shown.has(p.id))
+      .map((p) => ({ id: p.id, name: p.name }));
+    const picker = buildPickList(
+      [{ label: "Suggested", items: suggested }, { label: "All Navy Health policies", items: rest }],
+      (id) => { switchNavyPolicy(oldId, id); closeMenu(); renderSentence(); compare(true); });
+    menu = picker.el;
+    positionMenu(menu, anchor);
+    picker.focus();
+  }
+  // Shared by every popover anchored to a chip/button in the dock (the state/family/need/navy menus,
+  // and the bundle panel's "+ add extras" picker): placed just under its anchor, or above it when the
+  // dock leaves no room below, since the dock sits at the bottom of the screen.
+  function positionMenu(el, anchor) {
+    el.style.visibility = "hidden";
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    const below = r.bottom + 4 + el.offsetHeight <= window.innerHeight;
+    el.style.left = `${r.left + window.scrollX}px`;
+    el.style.top = below ? `${r.bottom + window.scrollY + 4}px` : `${r.top + window.scrollY - el.offsetHeight - 4}px`;
+    el.style.visibility = "";
+  }
+  document.addEventListener("click", (e) => {
+    if (menu && !menu.contains(e.target) && !e.target.closest(".tok[data-menu]") && !e.target.closest(".bundle-add")) closeMenu();
+  });
+
+  // ── the bundle panel: a hospital policy plus any number of extras policies, stacked ──────────
+  // S.groups holds [leaderId, ...extraIds]; every id in it is also a real entry in S.navy/S.comp —
+  // the panel only ever groups chips the rep has already added, it never adds a policy on its own.
+  function membersOf(leaderId) {
+    const g = S.groups.find((g) => g[0] === leaderId);
+    return g ? g.slice(1) : [];
+  }
+  function addToBundle(leaderId, p) {
+    // The leader may only be the auto-suggested Navy policy so far (shown in the panel, but not
+    // yet a real part of the comparison) — attaching extras to it is what confirms it.
+    if (leaderId === (S.autoNavy && S.autoNavy.id)) addPolicy(S.autoNavy);
+    addPolicy(p);
+    let g = S.groups.find((g) => g[0] === leaderId);
+    if (!g) { g = [leaderId]; S.groups.push(g); }
+    if (!g.includes(p.id)) g.push(p.id);
+  }
+  function ungroupMember(leaderId, id) {
+    const g = S.groups.find((g) => g[0] === leaderId);
+    if (g) {
+      const i = g.indexOf(id);
+      if (i > 0) g.splice(i, 1);
+      if (g.length < 2) S.groups = S.groups.filter((x) => x !== g);
+    }
+    removePolicy(id);   // detaching an extra from a bundle removes it from the comparison entirely —
+    renderBundlePanel(); // the simplest mental model: the panel's × always means "take this back out".
+  }
+  function renderBundlePanel() {
+    const panel = $("#bundle-panel");
+    if (!panel || !IX) return;
+    const nested = new Set(S.groups.flatMap((g) => g.slice(1)));   // shown under their leader, not at top level
+    const sideHtml = (side, label) => {
+      let leaders = S[side].filter((p) => !nested.has(p.id));
+      // The auto-suggested Navy policy is not a real selection yet (the rep never named one), but
+      // it's exactly what "add extras" should attach to — show it so there is something to click.
+      if (side === "navy" && !leaders.length && S.autoNavy) leaders = [S.autoNavy];
+      if (!leaders.length) return "";
+      const rows = leaders.map((p) => {
+        const suggested = side === "navy" && S.autoNavy && S.autoNavy.id === p.id && !S.navy.length;
+        const extras = membersOf(p.id).map((id) => IX.byId.get(id)).filter(Boolean)
+          .map((m) => `<span class="tok tok-bundle-extra" data-id="${m.id}">${esc(m.name)}
+            <button type="button" class="x" aria-label="Remove from bundle">×</button></span>`).join(" ");
+        return `<div class="bundle-row" data-leader="${p.id}">
+          <span class="bundle-leader">${esc(p.name)}${suggested ? ` <span class="muted small">(best match)</span>` : ""}</span>${extras}
+          <button type="button" class="link-btn bundle-add" data-leader="${p.id}" data-side="${side}">+ add extras</button>
+        </div>`;
+      }).join("");
+      return `<div class="bundle-side"><div class="muted small bundle-side-label">${label}</div>${rows}</div>`;
+    };
+    const html = sideHtml("navy", "Navy Health") + sideHtml("comp", "Competitor");
+    panel.innerHTML = html;
+    panel.hidden = !html;
+    $$(".bundle-add", panel).forEach((b) => b.addEventListener("click", () => openBundleMenu(b)));
+    $$(".tok-bundle-extra .x", panel).forEach((b) => b.addEventListener("click", (e) => {
+      const t = e.target.closest(".tok-bundle-extra");
+      ungroupMember(Number(t.closest(".bundle-row").dataset.leader), Number(t.dataset.id));
+      compare(true);
+    }));
+  }
+  function openBundleMenu(btn) {
+    closeMenu();
+    const leaderId = Number(btn.dataset.leader), side = btn.dataset.side;
+    const leader = IX.byId.get(leaderId);
+    const already = new Set([leaderId, ...membersOf(leaderId)]);
+    // Scoped to the leader's own fund by default — stacking a Bupa hospital policy with AAMI's
+    // extras is not a real bundle anyone buys, and listing every extras policy on the side made the
+    // picker unusable (dozens of unrelated funds). "Other funds" below still reaches the rest.
+    const toItem = (p) => ({ id: p.id, name: p.name, sub: p.fundName });
+    const sameFund = IX.policies.filter((p) => p.navy === (side === "navy") && p.type === "extras"
+      && p.fund === leader.fund && !already.has(p.id)).map(toItem);
+    const otherFund = IX.policies.filter((p) => p.navy === (side === "navy") && p.type === "extras"
+      && p.fund !== leader.fund && !already.has(p.id)).map(toItem);
+    const picker = buildPickList(
+      [{ label: leader.fundName, items: sameFund }, { label: "Other funds", items: otherFund }],
+      (id) => { const p = IX.byId.get(id); if (p) addToBundle(leaderId, p); closeMenu(); renderSentence(); compare(true); });
+    menu = picker.el;
+    positionMenu(menu, btn);
+    picker.focus();
+  }
+
+  // The help drawer (estimator + pushback) is a corner toggle, not a permanent column, so it closes
+  // on an outside click or Escape like any other popover.
+  function closeAssist(panel) {
+    panel.classList.remove("open");
+    const fab = $(`.assist-fab[aria-controls="${panel.id}"]`, result);
+    if (fab) fab.setAttribute("aria-expanded", "false");
+  }
+  document.addEventListener("click", (e) => {
+    $$(".sheet-assist.open", result).forEach((panel) => {
+      if (!panel.contains(e.target) && !e.target.closest(`.assist-fab[aria-controls="${panel.id}"]`)) closeAssist(panel);
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $$(".sheet-assist.open", result).forEach(closeAssist);
+  });
 
   // ── a question, when a name means more than one policy ───────────────────────
   function currentQuestion() {
@@ -515,14 +701,27 @@
     const list = p.navy ? S.navy : S.comp;
     if (list.some((x) => x.id === p.id)) return;
     if (S.navy.length + S.comp.length >= MAX_POLICIES) { showNotice(`Up to ${MAX_POLICIES} policies at a time.`); return; }
+    // An extras policy added while the Navy side is still just a suggestion (the rep has not named
+    // one) attaches to that suggestion instead of silently dropping it — adding extras was never a
+    // request to forget which hospital policy the screen was comparing.
+    if (p.navy && p.type === "extras" && !S.navy.length && S.autoNavy) {
+      S.navy.push(S.autoNavy);
+      S.groups.push([S.autoNavy.id, p.id]);
+      S.autoNavy = null;
+      list.push(p);
+      return;
+    }
     list.push(p);
-    if (p.navy) S.autoNavy = null;
+    if (p.navy && p.type !== "extras") S.autoNavy = null;
     if (!p.navy) pushRecent(p);
   }
   function removePolicy(id) {
     S.navy = S.navy.filter((p) => p.id !== id);
     S.comp = S.comp.filter((p) => p.id !== id);
     if (S.autoNavy && S.autoNavy.id === id) S.autoNavy = null;
+    // Removing a bundle's leader drops the whole bundle (there is nothing left to lead); removing
+    // one of its extras just detaches that one, same as the panel's own × does.
+    S.groups = S.groups.filter((g) => g[0] !== id).map((g) => g.filter((x) => x !== id)).filter((g) => g.length >= 2);
     renderSentence();
     compare(true);
   }
@@ -535,7 +734,7 @@
   function commit() {
     const p = live;
     if (!p) return;
-    if (p.fresh && p.refs.some((r) => r.policy)) { S.navy = []; S.comp = []; S.autoNavy = null; S.focus = []; S.questions = []; }
+    if (p.fresh && p.refs.some((r) => r.policy)) { S.navy = []; S.comp = []; S.autoNavy = null; S.focus = []; S.questions = []; S.groups = []; }
     // A name that still means several policies becomes the question; it replaces any older one, since
     // the rep has moved on to this.
     const asking = p.refs.filter((r) => !r.policy && r.question);
@@ -551,11 +750,12 @@
     const text = p.raw;
     if (p.cheaper && S.cheaper.length && !p.refs.some((r) => r.policy && r.policy.navy)) { setNavy(S.cheaper[0].id); S.focus = ["price"]; }
     else if (p.cheaper && !S.cheaper.length && (S.comp.length)) showNotice("Navy Health has no cheaper policy of this kind for this household. The card shows where it is stronger.");
+    const scrollToFocus = p.focus.length > 0;
     live = null;
     bar.value = "";
     suggestBox.hidden = true;
     renderSentence();
-    compare(true);
+    compare(true, scrollToFocus);
     if (askModel && text.trim().split(/\s+/).length >= 2) askTheModel(text);
   }
 
@@ -592,8 +792,8 @@
   $("#new-call").addEventListener("click", newCall);
   function newCall() {
     S.navy = []; S.comp = []; S.autoNavy = null; S.alternatives = []; S.cheaper = []; S.needs = new Set();
-    S.focus = []; S.excess = null; S.showAll = false; S.questions = []; usage = [];
-    live = null; bar.value = ""; notice.hidden = true; kept = null;
+    S.focus = []; S.excess = null; S.showAll = false; S.questions = []; S.groups = []; usage = [];
+    live = null; bar.value = ""; notice.hidden = true; kept = null; bar.placeholder = START_PLACEHOLDER;
     renderSentence();
     result.innerHTML = `<div class="empty-state"><p><strong>New call.</strong> Type the competitor's policy the way the member says it.</p></div>`;
     bar.focus();
@@ -617,6 +817,7 @@
   // confirmed answer, which is kept aside, talking point and all, and put back when the bar no longer
   // names anything new.
   let latestCard = 0, previewTimer = null, previewInFlight = false, kept = null;
+  let lastGroupMeta = [];   // [[syntheticId, [memberIds]], ...] from the most recent /card response
   function previewSoon() {
     clearTimeout(previewTimer);
     const certain = live ? live.refs.filter((r) => r.policy) : [];
@@ -642,6 +843,7 @@
     const ids = [...S.navy.map((p) => p.id), ...S.comp.map((p) => p.id)];
     (extraIds || []).forEach((id) => { if (!ids.includes(id)) ids.push(id); });
     const p = new URLSearchParams({ ids: ids.join(","), state: (live && live.state) || S.state, family: (live && live.family) || S.family });
+    if (S.groups.length) p.set("groups", S.groups.map((g) => g.join("+")).join(","));
     const needs = new Set([...S.needs, ...(live ? live.needs : [])]);
     if (needs.size) p.set("chips", [...needs].join(","));
     const focus = live && live.focus.length ? live.focus : S.focus;
@@ -664,7 +866,7 @@
       <p class="muted small">Try “bupa silver plus”, “defence gold”, “frank” or “our premium gold 750 vs hcf”. Then ask follow-ups in the same bar: “what about dental?”, “add medibank”, “cheaper option?”.</p>
     </div>`;
   }
-  async function compare(committed) {
+  async function compare(committed, scrollToFocus) {
     const extra = !committed && live ? live.refs.filter((r) => r.policy).map((r) => r.policy.id) : [];
     const params = cardParams(extra);
     if (!params.get("ids")) {
@@ -682,21 +884,60 @@
       showResult(html, committed);
       const metaEl = $("#card-meta", result);
       const meta = metaEl ? JSON.parse(metaEl.textContent) : {};
+      lastGroupMeta = meta.groups || [];
       if (committed) {
         S.autoNavy = meta.auto_navy || (S.navy.length ? null : S.autoNavy);
         S.alternatives = meta.alternatives || [];
         S.cheaper = meta.cheaper || [];
         renderSentence();
+        bar.placeholder = FOLLOW_UP_PLACEHOLDER;
       }
       wireResult(committed);
+      if (scrollToFocus) scrollToFocused();
     } catch (err) {
       if (mine === latestCard) result.innerHTML = `<p class="error">${esc(err.message)}</p>`;
     } finally {
       if (mine === latestCard) result.classList.remove("loading");
     }
   }
+  // Typing a specific benefit ("physio", "ambulance") opens its row and moves it to the top of its
+  // table, but scrolling the rep down to go find it is itself the problem — answer right at the bar
+  // where they typed instead, so there's nothing to chase and nothing to land on "nothing".
+  function scrollToFocused() {
+    const row = $(".xgroup.focus", result);
+    if (row) {
+      row.classList.add("just-focused");
+      setTimeout(() => row.classList.remove("just-focused"), 1600);
+      const label = $(".x-open", row);
+      const navyCell = $("tr.xrow > td:nth-child(2)", row);
+      const compCell = $("tr.xrow > td:nth-child(3)", row);
+      const gap = $(".x-gap-line", row);
+      const navyTxt = navyCell ? navyCell.textContent.replace(/\s+/g, " ").trim() : "";
+      const compTxt = compCell ? compCell.textContent.replace(/\s+/g, " ").trim() : "";
+      const bits = [label ? label.textContent.trim() : "", navyTxt && `Navy Health: ${navyTxt}`, compTxt && `Theirs: ${compTxt}`, gap && gap.textContent.trim()].filter(Boolean);
+      if (bits.length) showNotice(bits.join(" — "), "answer", 9000);
+      return;
+    }
+    // Nothing to land on (e.g. the benefit asked about is an extras service and neither policy here
+    // has extras at all) still needs to be seen — the server says why in a ".warn" line; surface that
+    // text at the bar instead of leaving the screen looking unchanged.
+    const warn = $(".warn", result);
+    if (warn) showNotice(warn.textContent.trim(), "answer warn", 9000);
+  }
   function wireResult(committed) {
-    $$(".remove-policy", result).forEach((b) => b.addEventListener("click", () => removePolicy(Number(b.dataset.id))));
+    $$(".remove-policy", result).forEach((b) => b.addEventListener("click", () => {
+      const id = Number(b.dataset.id);
+      if (id >= 0) { removePolicy(id); return; }
+      // A bundle column's id is synthetic (negative, server-assigned for this request only) —
+      // map it back to the real policies it merged, and remove every one of them plus the group.
+      const entry = lastGroupMeta.find((g) => g[0] === id);
+      const members = entry ? entry[1] : [];
+      S.groups = S.groups.filter((g) => !members.includes(g[0]));
+      members.forEach((m) => { S.navy = S.navy.filter((p) => p.id !== m); S.comp = S.comp.filter((p) => p.id !== m); });
+      if (S.autoNavy && members.includes(S.autoNavy.id)) S.autoNavy = null;
+      renderSentence();
+      compare(true);
+    }));
     const toggle = $("#toggle-all", result);
     if (toggle) toggle.addEventListener("click", () => { S.showAll = toggle.dataset.all === "1"; compare(true); });
     $$(".excess-choice", result).forEach((b) => b.addEventListener("click", () => { S.excess = b.dataset.excess; compare(true); }));
@@ -722,6 +963,12 @@
       const text = (t.textContent || "").replace(/^“|”$/g, "");
       if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotice("Copied."), () => {});
     }));
+    $$(".assist-fab", result).forEach((b) => b.addEventListener("click", () => {
+      const panel = document.getElementById(b.getAttribute("aria-controls"));
+      if (!panel) return;
+      const open = panel.classList.toggle("open");
+      b.setAttribute("aria-expanded", String(open));
+    }));
     $$(".estimator", result).forEach(wireEstimator);
     $$(".objections", result).forEach((box) => {
       const input = $(".objection-input", box), ask = $(".objection-ask", box);
@@ -739,7 +986,7 @@
     if (kind === "add_comp") { bar.value = "add "; bar.focus(); onInput(); return; }
     if (kind === "table") { const m = $("#matrix", result); if (m) { m.open = true; m.scrollIntoView({ behavior: "smooth", block: "start" }); } return; }
     renderSentence();
-    compare(true);
+    compare(true, kind === "need" || kind === "swap_navy");
   }
 
   // ── the talking point, streamed, then replaced by the checked text ──────────
@@ -1077,12 +1324,12 @@
     compare(true);
   }
 
-  function showNotice(msg, kind) {
+  function showNotice(msg, kind, ms) {
     notice.hidden = false;
     notice.className = "notice" + (kind ? " " + kind : "");
     notice.textContent = msg;
     clearTimeout(showNotice.t);
-    showNotice.t = setTimeout(() => { notice.hidden = true; }, 4000);
+    showNotice.t = setTimeout(() => { notice.hidden = true; }, ms || 4000);
   }
 
   bar.disabled = true;

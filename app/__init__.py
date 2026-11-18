@@ -14,7 +14,7 @@ import os
 import secrets
 
 from dotenv import load_dotenv
-from flask import Flask, g, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, g, jsonify, redirect, render_template, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app import auth
@@ -105,6 +105,22 @@ def create_app() -> Flask:
     from app import devmode
     if devmode.bypass_enabled():
         log.warning("NAVY_DEV_NO_LOGIN is set: sign-in is off for this local server")
+
+    demo_password = os.environ.get("DEMO_PASSWORD")
+    if demo_password:
+        log.warning("DEMO_PASSWORD is set: the whole site is behind a shared Basic Auth password")
+
+    @app.before_request
+    def _demo_gate():
+        # A throwaway password in front of a test deploy — separate from the
+        # real per-person accounts below, which still apply after this.
+        if not demo_password:
+            return None
+        creds = request.authorization
+        if not creds or not secrets.compare_digest(creds.password or "", demo_password):
+            return Response("Authentication required", 401,
+                            {"WWW-Authenticate": 'Basic realm="Navy Compare demo"'})
+        return None
 
     @app.before_request
     def _authorise():

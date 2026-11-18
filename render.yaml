@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: navy-compare-demo
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: DEMO_PASSWORD
+        value: Demo2026
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: FEEDBACK_EMAIL
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: APP_BUILD
+        value: render-demo

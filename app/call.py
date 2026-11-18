@@ -45,6 +45,7 @@ from config import features as feats
 from config import language as lang
 from config.reference import DEPENDANT_TITLES, EXTRAS_ITEMS, FAMILY_TYPES, STATES
 from engine import benefits as bn
+from engine import bundle, suggest
 from engine import catalog as cat
 from engine import claims as cl
 from engine import differences as df
@@ -52,7 +53,6 @@ from engine import estimate as est
 from engine import materiality as mat
 from engine import plan as planning
 from engine import script as talk
-from engine import suggest
 from engine.db import EngineError, Snapshot
 
 bp = Blueprint("call", __name__)
@@ -261,6 +261,7 @@ def call_plan():
 @dataclass
 class Selection:
     ids: list[int]
+    groups: list[list[int]]
     state: str
     family: str
     scope: str
@@ -270,6 +271,22 @@ class Selection:
     show_all: bool
     excess: Optional[float]
     auto_navy: bool
+
+
+def _groups(source, ids: list[int]) -> list[list[int]]:
+    """Bundles the rep built in the panel: a hospital policy plus any number of extras policies,
+    to be priced and compared as one product. `groups=101+201+202,501+503` — ids within one `+`
+    group are merged into one synthetic column (engine.call._apply_groups); any id not named in
+    `groups` stays its own standalone column, exactly as before this existed. An id a group names
+    that was not also given in `ids` is dropped rather than trusted blind."""
+    known = set(ids)
+    out: list[list[int]] = []
+    for chunk in (source.get("groups") or "").split(","):
+        members = [int(v) for v in chunk.split("+") if v.strip().isdigit()]
+        members = [m for m in members if m in known]
+        if len(members) >= 2:
+            out.append(members)
+    return out
 
 
 def _selection(source) -> "Selection | str":
@@ -283,6 +300,7 @@ def _selection(source) -> "Selection | str":
     for v in items("ids"):
         if v.isdigit() and int(v) not in ids:
             ids.append(int(v))
+    ids = ids[:MAX_POLICIES]
     state = source.get("state") or "NSW"
     family = source.get("family") or "couple"
     if state not in REAL_STATES or family not in FAMILY_TYPES:
@@ -297,12 +315,53 @@ def _selection(source) -> "Selection | str":
     except ValueError:
         excess = None
     return Selection(
-        ids=ids[:MAX_POLICIES], state=state, family=family,
+        ids=ids, groups=_groups(source, ids), state=state, family=family,
         scope="+".join(titles) if family in ("family", "single_parent", "dependants_only") else "",
         wanted=[k for k in items("features") if k in feats.FEATURES],
         focus=[k for k in items("focus") if k in feats.FEATURES],
         chips={c for c in items("chips") if c in chip_keys},
         show_all=source.get("all") == "1", excess=excess, auto_navy=source.get("auto") != "0")
+
+
+def _bundle_product_type(members: list[int], by_id: dict[int, dict]) -> str:
+    types = {by_id[m]["product_type"] for m in members}
+    if types <= {"hospital"}:
+        return "hospital"
+    if types <= {"extras"}:
+        return "extras"
+    return "combined"
+
+
+def _apply_groups(groups: list[list[int]], navy_ids: list[int], comp_ids: list[int],
+                   vals: dict[int, dict], by_id: dict[int, dict]) -> list[list]:
+    """Replace each group's member ids, within whichever real side they're actually still on, with
+    one synthetic id whose Value dict is their merge (engine.bundle.merge_values) — a bundle the rep
+    built from a hospital policy plus any number of extras policies, priced and compared as one
+    product. Mutates navy_ids/comp_ids/vals/by_id in place; a member named on the wrong side (or
+    already gone) is dropped from the group rather than erroring. Returns the [synthetic_id,
+    [member_ids]] pairs for the response, so the client can map a bundle column back to its real
+    policies (to remove the whole bundle when the rep removes that column)."""
+    group_meta: list[list] = []
+    for i, group in enumerate(groups):
+        side_ids = navy_ids if group[0] in navy_ids else comp_ids
+        members = [g for g in group if g in side_ids and g in vals]
+        if len(members) < 2:
+            continue   # nothing left to merge on one real side
+        synthetic = -(i + 1)
+        vals[synthetic] = bundle.merge_values([vals[m] for m in members])
+        leader = members[0]
+        by_id[synthetic] = {
+            "id": synthetic, "name": " + ".join(by_id[m]["name"] for m in members),
+            "fund_name": by_id[leader]["fund_name"], "fund_code": by_id[leader]["fund_code"],
+            "is_navy": by_id[leader]["is_navy"], "status": "Open",
+            "product_type": _bundle_product_type(members, by_id),
+        }
+        pos = side_ids.index(leader)
+        for m in members:
+            side_ids.remove(m)
+        side_ids.insert(min(pos, len(side_ids)), synthetic)
+        group_meta.append([synthetic, members])
+    return group_meta
 
 
 @bp.route("/card")
@@ -335,6 +394,8 @@ def card():
     entries = cat.catalog(db)
     vals = bn.values(data, excess=sel.excess, order=columns)
     anchor = bn.anchor_excess(data, sel.excess, columns)
+    group_meta = _apply_groups(sel.groups, navy_ids, comp_ids, vals, by_id)
+    columns = navy_ids + comp_ids
     cards = [df.card(n, c, vals, keys=sel.wanted or None, chips=sel.chips)
              for n in navy_ids for c in comp_ids][:MAX_CARDS]
     rows = df.matrix(columns, vals, keys=sel.wanted or None, show_all=sel.show_all)
@@ -370,6 +431,12 @@ def card():
         shown.append({"card": c, "answers": answers, "extras": extras, "neither": neither,
                       "hospital": cl.hospital_sheet(c.navy_id, c.comp_id, vals, focus=focus_categories),
                       "price": cl.price_gap(c.price), "objections": objections})
+    # A benefit named in the bar ("physio") can be real but land nowhere: a hospital-only pair has no
+    # extras at all, so the service the rep asked about is not part of either side. Say that plainly
+    # instead of leaving the screen looking unchanged, as if the question was never heard.
+    focus_service_label = None
+    if focus_services and shown and all(not s["extras"] for s in shown):
+        focus_service_label = cl.SERVICE_LABELS.get(focus_services[0], focus_services[0])
     followups = suggest.follow_ups(cards[0], active_chips=sel.chips, cheaper=cheaper, focus=sel.focus) if cards else []
 
     heads = []
@@ -381,7 +448,7 @@ def card():
     meta = {"columns": columns, "auto_navy": auto,
             "alternatives": alternatives[:3], "cheaper": [{"id": x["id"], "name": x["current_name"],
                                                           "premium": float(x["premium"])} for x in cheaper],
-            "pairs": [[c.navy_id, c.comp_id] for c in cards], "anchor": anchor}
+            "pairs": [[c.navy_id, c.comp_id] for c in cards], "anchor": anchor, "groups": group_meta}
     return render_template(
         "_card.html", error=None, heads=heads, by_id=by_id, shown=shown, rows=rows,
         state=sel.state, family=sel.family, scope=sel.scope, anchor=anchor, chips=sel.chips,
@@ -392,7 +459,7 @@ def card():
         excess_options=sorted({float(r["excess"] or 0) for r in data["rates"]}),
         followups=followups, auto=auto, meta=meta, comp_only=not cards and bool(comp_ids), cat_defs=CAT_DEFS,
         focus_categories=focus_categories, extras_rows_shown=EXTRAS_ROWS_SHOWN,
-        hospital_items_shown=HOSPITAL_ITEMS_SHOWN)
+        hospital_items_shown=HOSPITAL_ITEMS_SHOWN, focus_service_label=focus_service_label)
 
 
 def _pair():
@@ -471,26 +538,29 @@ def call_usage():
                     "unclear": read.unclear})
 
 
-def _talk_pack(sel: "Selection", navy_id: int, comp_id: int):
-    """The facts for one card's talking point, or a reason it cannot be written."""
+def _talk_pack(sel: "Selection", navy_id: int, comp_id: int, *, full: bool = False):
+    """The facts for one card's talking point, or a reason it cannot be written. The opening pitch
+    stays scoped to what the rep asked about (sel.wanted); a reply to pushback goes in `full`, since
+    the member can raise anything on either policy, not only what's on screen."""
     db = Snapshot()
     data = bn.fetch(db, ids=[navy_id, comp_id], state=sel.state, family=sel.family, scope=sel.scope)
     by_id = {p["id"]: p for p in data["policies"]}
     if navy_id not in by_id or comp_id not in by_id or not by_id[navy_id]["is_navy"] or by_id[comp_id]["is_navy"]:
         return None, "A talking point needs a Navy Health policy and a competitor's."
     vals = bn.values(data, excess=sel.excess, order=[navy_id, comp_id])
-    the_card = df.card(navy_id, comp_id, vals, keys=sel.wanted or None, chips=sel.chips)
+    the_card = df.card(navy_id, comp_id, vals, keys=None if full else (sel.wanted or None), chips=sel.chips)
     rows = talk.facts(the_card, navy_name=by_id[navy_id]["name"], comp_name=by_id[comp_id]["name"],
-                      snapshot=data["snapshot"], state=sel.state, family=sel.family)
+                      snapshot=data["snapshot"], state=sel.state, family=sel.family, full=full)
     if not rows:
         return None, "There is nothing on these benefits to talk about."
     return EvidencePack.of([Fact.model_validate(f) for f in rows], name="card"), None
 
 
-def _prepared(question: str):
+def _prepared(question: str, *, full: bool = False):
     """sel, the two policy ids, the card's facts and the context the writer is given — shared by the
     opening talking point (question="") and a reply to something the member said (question=<what they
-    said>). Both read from exactly the same facts; only what is asked of them differs."""
+    said>). Both read from exactly the same facts; only what is asked of them, and how much of the
+    policy is in scope (`full`), differs."""
     _check_csrf()
     sel = _selection(request.form)
     if isinstance(sel, str):
@@ -500,7 +570,7 @@ def _prepared(question: str):
     except ValueError:
         return None, (jsonify({"error": "Which card?"}), 400)
     try:
-        pack, why = _talk_pack(sel, navy_id, comp_id)
+        pack, why = _talk_pack(sel, navy_id, comp_id, full=full)
     except EngineError as exc:
         return None, (jsonify({"error": str(exc)}), 400)
     if pack is None:
@@ -521,7 +591,7 @@ def _objection_request():
     question = OBJECTION_PRESETS.get(preset) or free
     if not question:
         return None, (jsonify({"error": "What did the member say?"}), 400)
-    return _prepared(question)
+    return _prepared(question, full=True)
 
 
 def _compose_once(prepared, system_path: Path, kind: str):

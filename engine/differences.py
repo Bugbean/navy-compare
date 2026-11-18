@@ -11,8 +11,9 @@ Two views, both read from the Values in engine/benefits.py:
                      with the best value, where the benefit can be ranked at all.
 
 Nothing here invents a judgement the data does not support. A benefit whose two values cannot be
-ranked (a limit per person against one per policy, two kinds of accommodation) is "different", and
-the excess is always a trade-off: a lower excess comes with a higher premium.
+ranked (a limit per person against one per policy, two kinds of accommodation) is "different".
+A lower excess is ranked as a win on its own terms, like any other benefit — the price row is a
+separate comparison and is not folded into it.
 """
 from __future__ import annotations
 
@@ -73,11 +74,6 @@ def compare_pair(key: str, navy: Optional[Value], comp: Optional[Value], cfg: Op
     if kind == "wait_months" and (navy.rank is None or comp.rank is None):
         # One side does not cover what this wait is for; the clinical category row already says so.
         d.direction = MISSING
-        return d
-    if kind == "excess":
-        d.direction = TRADE_OFF if navy.size != comp.size else SAME
-        d.size = _size(navy, comp)
-        d.materiality = mat.score("excess", d.size, cfg) if d.direction == TRADE_OFF else 0
         return d
     if not comparable(navy, comp) or navy.rank == comp.rank:
         d.direction = DIFFERENT if navy.display != comp.display else SAME
@@ -162,9 +158,8 @@ def matrix(columns: list[int], vals: dict[int, dict[str, Value]], *, keys: Optio
         if not keys and not show_all and same and k not in CORE_ROWS:
             continue
         best: set[int] = set()
-        kind = next(v.kind for v in cells if v is not None)
         ranked = [(i, v) for i, v in enumerate(cells) if v is not None and v.rank is not None]
-        if len(ranked) >= 2 and not same and kind != "excess":
+        if len(ranked) >= 2 and not same:
             bases = {v.basis for _, v in ranked if v.basis != "any"}
             if len(bases) <= 1:
                 top = max(v.rank for _, v in ranked)

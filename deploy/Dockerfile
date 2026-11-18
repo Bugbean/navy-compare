@@ -6,12 +6,18 @@ WORKDIR /app
 
 # WeasyPrint (week 4, PDF) will need libpango and fonts here, about 60 MB.
 
+# engine/db.py shells out to psql for every comparison query (see that
+# module's docstring) — the image needs the client binary, not just psycopg.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml ./
 COPY app/ ./app/
 COPY ai/ ./ai/
 COPY jobs/ ./jobs/
 COPY identity/ ./identity/
 COPY config/ ./config/
+COPY engine/ ./engine/
 COPY migrations/ ./migrations/
 COPY alembic.ini wsgi.py ./
 RUN pip install --no-cache-dir .

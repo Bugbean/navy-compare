@@ -1,7 +1,7 @@
 """Which policy is better, benefit by benefit: the rules the card and the matrix follow.
 
 Built from hand-made Values, so each rule is visible in the test: the direction, the materiality from
-config/materiality.yaml, the excess as a trade-off, values that cannot be ranked, and chips moving a
+config/materiality.yaml, the lower excess as a win, values that cannot be ranked, and chips moving a
 benefit up the card.
 """
 import pytest
@@ -9,7 +9,7 @@ import pytest
 from config.features import FEATURES
 from engine import materiality as mat
 from engine.benefits import UNLIMITED, Value
-from engine.differences import COMP_BETTER, DIFFERENT, MISSING, NAVY_BETTER, SAME, TRADE_OFF, card, compare_pair, matrix
+from engine.differences import COMP_BETTER, DIFFERENT, MISSING, NAVY_BETTER, SAME, card, compare_pair, matrix
 
 
 def cover(key, level):
@@ -46,11 +46,11 @@ def test_a_cheaper_premium_is_better_and_banded_by_the_gap():
     assert compare_pair("price", price(340), price(300)).direction == COMP_BETTER
 
 
-def test_the_excess_is_a_trade_off_never_a_win():
-    a = Value("excess", "excess", "$500 a person a year", None, 500.0)
-    b = Value("excess", "excess", "$750 a person a year", None, 750.0)
+def test_a_lower_excess_wins():
+    a = Value("excess", "excess", "$500 a person a year", -500.0, 500.0, "dollars")
+    b = Value("excess", "excess", "$750 a person a year", -750.0, 750.0, "dollars")
     d = compare_pair("excess", a, b)
-    assert d.direction == TRADE_OFF and d.materiality == 1
+    assert d.direction == NAVY_BETTER and d.materiality == 1
 
 
 def test_limits_on_different_bases_are_not_ranked():
@@ -130,10 +130,10 @@ def test_the_matrix_marks_the_best_value_and_fades_rows_that_agree():
     assert rows["cover:HeartVascular"].best == set()   # the two that have it agree; the third does not list it
 
 
-def test_the_matrix_never_marks_a_best_excess():
-    vals = {1: {"excess": Value("excess", "excess", "$500", None, 500.0)},
-            2: {"excess": Value("excess", "excess", "$750", None, 750.0)}}
-    assert matrix([1, 2], vals, keys=["excess"])[0].best == set()
+def test_the_matrix_marks_the_lower_excess_as_best():
+    vals = {1: {"excess": Value("excess", "excess", "$500", -500.0, 500.0, "dollars")},
+            2: {"excess": Value("excess", "excess", "$750", -750.0, 750.0, "dollars")}}
+    assert matrix([1, 2], vals, keys=["excess"])[0].best == {0}
 
 
 def test_the_default_matrix_keeps_core_rows_and_drops_other_rows_that_agree():

@@ -165,14 +165,14 @@ def _hospital_vals():
         "cover:BoneJointMuscle": cover("cover:BoneJointMuscle", "Covered", 2.0),
         "cover:HeartVascular": cover("cover:HeartVascular", "Covered", 2.0),
         "cover:Psychiatric": cover("cover:Psychiatric", "Restricted", 1.0),
-        "excess": Value("excess", "excess", "$500", 500.0, 500.0),
+        "excess": Value("excess", "excess", "$500", -500.0, 500.0, "dollars"),
         "known_gap": Value("known_gap", "known_gap", "Yes", 1.0, None),
     }
     comp = {
         "cover:BoneJointMuscle": cover("cover:BoneJointMuscle", "Not covered", 0.0),
         "cover:HeartVascular": cover("cover:HeartVascular", "Covered", 2.0),
         "cover:Psychiatric": cover("cover:Psychiatric", "Covered", 2.0),
-        "excess": Value("excess", "excess", "$750", 750.0, 750.0),
+        "excess": Value("excess", "excess", "$750", -750.0, 750.0, "dollars"),
         "known_gap": Value("known_gap", "known_gap", "No", 0.0, None),
     }
     return {1: navy, 2: comp}
@@ -185,7 +185,7 @@ def test_the_hospital_sheet_lists_what_only_one_side_covers_and_counts_the_rest(
     assert h.both == 1
     keys = [d.key for d in h.essentials]
     assert keys == ["excess", "known_gap"]
-    assert next(d for d in h.essentials if d.key == "excess").direction == "trade_off"
+    assert next(d for d in h.essentials if d.key == "excess").direction == "navy_better"
 
 
 COSTS = {
@@ -200,9 +200,8 @@ def test_a_hospital_difference_says_what_the_member_pays_on_each_side_in_dollars
     h = cl.hospital_sheet(1, 2, _hospital_vals(), costs=COSTS)
     it = h.navy_only[0]
     assert it.private_cost == 18000 and it.wait == "about 8 months" and it.procedure == "a shoulder reconstruction"
-    assert it.navy_pays == "Covered: pays the $500 excess, plus any doctors' gap"
-    assert it.comp_pays == ("Not covered: pays the whole private bill (typically $18,000), "
-                            "or waits about 8 months as a public patient")
+    assert it.navy_pays == "Covered: $500 excess, plus any doctors' gap"
+    assert it.comp_pays == "Not covered"
     assert it.say == ("If you ever need a shoulder reconstruction, which typically costs about $18,000 in a private "
                       "hospital, with Navy Health you'd pay the $500 excess plus any doctors' gap. Your current "
                       "policy doesn't cover it, so you'd pay it yourself or wait about 8 months in the public system.")
@@ -227,7 +226,7 @@ def test_without_a_sourced_figure_nothing_is_invented():
     it = h.navy_only[0]
     assert it.private_cost is None and it.wait == ""
     assert "$" not in it.comp_pays.replace("$500", "") and "typically" not in it.say
-    assert it.comp_pays == "Not covered: pays the whole private bill, or goes on the public waiting list"
+    assert it.comp_pays == "Not covered"
 
 
 def test_the_biggest_bill_comes_first_unless_the_rep_asked_about_one():

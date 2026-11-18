@@ -9,3 +9,5 @@ __pycache__/
 .mypy_cache/
 build/
 dist/
+flask_*.log
+flask_pid.csv

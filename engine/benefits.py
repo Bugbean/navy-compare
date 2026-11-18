@@ -195,7 +195,7 @@ def values(data: dict, *, excess: Optional[float] = None,
             note = "no excess" if ex == 0 else f"at {_money(ex)} excess"
             vals["price"] = Value("price", "premium", f"{_money(float(rate['premium']))} a month",
                                   -float(rate["premium"]), float(rate["premium"]), "dollars", note)
-            vals["excess"] = Value("excess", "excess", _excess_text(rate), None, ex)
+            vals["excess"] = Value("excess", "excess", _excess_text(rate), -ex, ex, "dollars")
             ctype = rate["copayment_type"]
             if ctype in (None, "None"):
                 vals["copayment"] = Value("copayment", "copayment", "No co-payment", 0.0, 0.0)

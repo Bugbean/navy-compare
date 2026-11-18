@@ -82,11 +82,17 @@ MAX_NEED_MATCHED_EXTRA = 4
 MAX_EVERYDAY_EXTRA = 3
 
 
-def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: str, family: str) -> list[dict]:
+def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: str, family: str,
+          full: bool = False) -> list[dict]:
     """The card's facts: the price, the gaps in the everyday extras services, Navy Health's top
     strengths, the competitor's top strengths, the excess trade-off, and — beyond the usual cutoff —
     anything that matches what the member said they care about, so that fact reaches the writer even
-    when it is not the single highest-scoring one."""
+    when it is not the single highest-scoring one.
+
+    `full` is for a reply to pushback, not the opening pitch: the member can ask about anything on
+    either policy, including a benefit the two share equally, so every benefit becomes a fact - the
+    curation and the 5/3 cutoffs below are for keeping the opening pitch punchy, not for deciding what
+    the writer is allowed to know when answering a direct question."""
     chosen: list[Difference] = []
     seen: set[str] = set()
 
@@ -97,29 +103,33 @@ def facts(card: Card, *, navy_name: str, comp_name: str, snapshot: int, state: s
 
     if card.price and card.price.navy and card.price.comp:
         take(card.price)
-    # The services nearly every member claims on (dental, optical, physio...) come straight after the
-    # price: a real gap in one of those is worth more on a call than a bigger-scoring gap in a service
-    # few people use, and the writer falls back to the order it is given.
-    everyday = [d for d in card.stronger + card.watch
-                if d.key.split(":", 1)[0] in ("extras", "limit") and d.key.split(":", 1)[1] in EVERYDAY_SERVICES]
-    everyday.sort(key=lambda d: EVERYDAY_SERVICES.index(d.key.split(":", 1)[1]))
-    for d in everyday[:MAX_EVERYDAY_EXTRA]:
-        take(d)
-    for d in card.stronger[:5]:
-        if d.key != "price":
+    if full:
+        for d in card.stronger + card.watch + card.trade_offs + card.same + card.missing:
             take(d)
-    for d in card.watch[:3]:
-        if d.key != "price":
+    else:
+        # The services nearly every member claims on (dental, optical, physio...) come straight after
+        # the price: a real gap in one of those is worth more on a call than a bigger-scoring gap in a
+        # service few people use, and the writer falls back to the order it is given.
+        everyday = [d for d in card.stronger + card.watch
+                    if d.key.split(":", 1)[0] in ("extras", "limit") and d.key.split(":", 1)[1] in EVERYDAY_SERVICES]
+        everyday.sort(key=lambda d: EVERYDAY_SERVICES.index(d.key.split(":", 1)[1]))
+        for d in everyday[:MAX_EVERYDAY_EXTRA]:
             take(d)
-    extra = 0
-    for d in card.stronger + card.watch:
-        if d.chip_match and d.key not in seen and extra < MAX_NEED_MATCHED_EXTRA:
-            take(d)
-            extra += 1
-    for d in card.trade_offs:
-        if d.key == "excess":
-            take(d)
-            break
+        for d in card.stronger[:5]:
+            if d.key != "price":
+                take(d)
+        for d in card.watch[:3]:
+            if d.key != "price":
+                take(d)
+        extra = 0
+        for d in card.stronger + card.watch:
+            if d.chip_match and d.key not in seen and extra < MAX_NEED_MATCHED_EXTRA:
+                take(d)
+                extra += 1
+        for d in card.trade_offs:
+            if d.key == "excess":
+                take(d)
+                break
     costs = category_costs()
     return [_fact(f"F{i + 1}", d, navy_name, comp_name, snapshot, state, family, costs)
             for i, d in enumerate(chosen)]
