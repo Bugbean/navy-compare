@@ -108,7 +108,10 @@ def create_app() -> Flask:
 
     demo_password = os.environ.get("DEMO_PASSWORD")
     if demo_password:
-        log.warning("DEMO_PASSWORD is set: the whole site is behind a shared Basic Auth password")
+        log.warning("DEMO_PASSWORD is set: the whole site is behind a shared Basic Auth password, "
+                    "and the Basic Auth password box doubles as sign-in — no per-person account needed")
+    demo_user = auth.User(id="00000000-0000-0000-0000-000000000001", email="demo@navy-compare.local",
+                          full_name="Demo viewer", phone=None, status="approved", is_admin=True)
 
     @app.before_request
     def _demo_gate():
@@ -130,6 +133,11 @@ def create_app() -> Flask:
         g.new_session = None
         if devmode.bypass_enabled():
             g.user = devmode.dev_user()
+            return None
+        if demo_password:
+            # The Basic Auth box above is this demo's only sign-in; nobody
+            # needs a real per-person account to look at it.
+            g.user = demo_user
             return None
         resolved = auth.resolve(request.cookies.get(auth.COOKIE_ACCESS),
                                 request.cookies.get(auth.COOKIE_REFRESH))
